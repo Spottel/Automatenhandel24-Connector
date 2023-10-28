@@ -1,0 +1,36 @@
+{
+  "name": "automatenhandel24connector",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "initUser": "node initUser.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@elbstack/lexoffice-client-js": "^1.0.1",
+    "@hubspot/api-client": "^8.4.2",
+    "axios": "^1.2.4",
+    "bcrypt": "^5.1.0",
+    "body-parser": "^1.20.1",
+    "cookie-parser": "^1.4.6",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.7",
+    "dotenv": "^16.0.3",
+    "express": "^4.18.2",
+    "jsonwebtoken": "^9.0.0",
+    "lodash": "^4.17.21",
+    "mysql-await": "^2.2.3",
+    "node-cron": "^3.0.2",
+    "node-fetch": "^3.2.6",
+    "nodemailer": "^6.9.1",
+    "playwright": "^1.39.0",
+    "simple-json-db": "^2.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.20"
+  }
+}

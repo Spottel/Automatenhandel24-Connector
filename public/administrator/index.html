@@ -1,0 +1,442 @@
+<!DOCTYPE html>
+<html lang="en"> 
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="public/administrator/app.css">
+  <!-- Font Awesome -->
+  <link
+    href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css"
+    rel="stylesheet"
+  />
+  <!-- Google Fonts -->
+  <link
+    href="https://fonts.googleapis.com/css?family=Roboto:300,400,500,700&display=swap"
+    rel="stylesheet"
+  />
+  <!-- MDB -->
+  <link
+    href="https://cdnjs.cloudflare.com/ajax/libs/mdb-ui-kit/6.1.0/mdb.min.css"
+    rel="stylesheet"
+  />
+  <!-- Datatable -->
+  <link
+    href="https://cdn.datatables.net/1.13.4/css/jquery.dataTables.min.css"
+    rel="stylesheet"
+  />
+  <link
+    href="//gyrocode.github.io/jquery-datatables-checkboxes/1.2.12/css/dataTables.checkboxes.css"
+    rel="stylesheet"
+  />
+  <title>Automatenhandel24 Connector - Administration</title>
+</head>
+  <body>
+
+
+
+      <!-- Navbar -->
+      <nav class="navbar navbar-expand-lg navbar-light bg-light">
+        <!-- Container wrapper -->
+        <div class="container">
+          <!-- Navbar brand -->
+          <a class="navbar-brand me-2" href="administrator">
+            <img
+              src="public/administrator/logo.png"
+              height="50"
+              alt="Automatenhandel24 Logo"
+              loading="lazy"
+              style="margin-top: -1px;"
+            />
+          </a>
+
+          <!-- Toggle button -->
+          <button
+            class="navbar-toggler"
+            type="button"
+            data-mdb-toggle="collapse"
+            data-mdb-target="#navbarButtonsExample"
+            aria-controls="navbarButtonsExample"
+            aria-expanded="false"
+            aria-label="Toggle navigation"
+          >
+            <i class="fas fa-bars"></i>
+          </button>
+
+          <!-- Collapsible wrapper -->
+          <div class="collapse navbar-collapse" id="navbarButtonsExample">
+            <!-- Left links -->
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+              <li class="nav-item">
+                <a class="nav-link" href="#">Automatenhandel24 Connector - Administration</a>
+              </li>
+            </ul>
+            <!-- Left links -->
+
+            <div class="d-flex align-items-center">
+              <button type="button" class="btn btn-link px-3 me-2" id="logoutButton">
+                Logout
+              </button>
+            </div>
+          </div>
+          <!-- Collapsible wrapper -->
+        </div>
+        <!-- Container wrapper -->
+      </nav>
+      <!-- Navbar -->
+
+      <!-- Content -->
+      <div class="container">
+        <br/>
+        <!-- Tabs navs -->
+        <ul class="nav nav-tabs mb-3" id="ex-with-icons" role="tablist">
+          <li class="nav-item" role="presentation">
+            <a class="nav-link active" id="ex-with-icons-tab-1" data-mdb-toggle="tab" href="#ex-with-icons-tabs-1" role="tab"
+              aria-controls="ex-with-icons-tabs-1" aria-selected="true"><i class="fas fa-chart-pie fa-fw me-2"></i>Logs</a>
+          </li>
+          <li class="nav-item" role="presentation">
+            <a class="nav-link" id="ex-with-icons-tab-2" data-mdb-toggle="tab" href="#ex-with-icons-tabs-2" role="tab"
+              aria-controls="ex-with-icons-tabs-2" aria-selected="false"><i class="fas fa-cogs fa-fw me-2"></i>Settings</a>
+          </li>
+        </ul>
+        <!-- Tabs navs -->
+
+
+        <!-- Tabs content -->
+        <div class="tab-content" id="ex-with-icons-content">
+          <div class="tab-pane fade show active" id="ex-with-icons-tabs-1" role="tabpanel" aria-labelledby="ex-with-icons-tab-1">
+
+            <div class="btn-group">
+              <input type="radio" class="btn-check" name="options" id="error_log_option1" autocomplete="off" checked />
+              <label class="btn btn-secondary" for="error_log_option1">All</label>
+            
+              <input type="radio" class="btn-check" name="options" id="error_log_option2" autocomplete="off" />
+              <label class="btn btn-secondary" for="error_log_option2">Error</label>
+            
+              <input type="radio" class="btn-check" name="options" id="error_log_option3" autocomplete="off" />
+              <label class="btn btn-secondary" for="error_log_option3">Success</label>
+            </div>
+            <br/><br/><br/>
+            <button type="button" class="btn btn-primary" id="error_log_delete_show_modal_button" disabled>Löschen</button>
+            <!-- Delete Modal -->
+            <div class="modal fade" id="error_log_delete_modal" tabindex="-1" aria-labelledby="error_log_delete_modal_label" aria-hidden="true">
+              <div class="modal-dialog">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h5 class="modal-title" id="error_log_delete_modal_label">Confirm</h5>
+                    <button type="button" class="btn-close" data-mdb-dismiss="modal" aria-label="Close"></button>
+                  </div>
+                  <div class="modal-body">Do you really want to delete the selected logs?</div>
+                  <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-mdb-dismiss="modal">No</button>
+                    <button type="button" class="btn btn-primary" id="error_log_delete_button">Yes</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <br/><br/>
+            <table class="table align-middle mb-0 bg-white display" id="errortable" style="width:100%">
+              <thead>
+                <tr>
+                  <th></th>
+                  <th>Datum</th>
+                  <th>Type</th>
+                  <th>Module</th>
+                  <th>Meldung</th>
+                  <th>Aktion</th>
+                </tr>
+              </thead>
+              <tbody>
+
+              </tbody>
+            </table>
+
+          </div>
+
+
+
+          <div class="tab-pane fade" id="ex-with-icons-tabs-2" role="tabpanel" aria-labelledby="ex-with-icons-tab-2">
+            <div class="accordion" id="accordionExample">
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="headingMailer">
+                  <button class="accordion-button" type="button" data-mdb-toggle="collapse" data-mdb-target="#collapseMailer" aria-expanded="true" aria-controls="collapseMailer">Mailer</button>
+                </h2>
+                <div id="collapseMailer" class="accordion-collapse collapse" aria-labelledby="headingMailer" data-mdb-parent="#accordionExample">
+                  <div class="accordion-body">
+                    <form class="row g-3 needs-validation" novalidate id="form1">
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="maileractive"/>
+                            <label class="form-check-label" for="maileractive">Aktivieren</label>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="mailerhost" required />
+                          <label for="mailerhost" class="form-label">Host</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="mailerport" required />
+                          <label for="mailerport" class="form-label">Port</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="mailersecure"/>
+                            <label class="form-check-label" for="mailersecure">Verschlüsselt</label>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" role="switch" id="mailergoogle"/>
+                            <label class="form-check-label" for="mailergoogle">Google</label>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="maileruser" required />
+                          <label for="maileruser" class="form-label">Benutzer</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="password" class="form-control" id="mailerpassword" required />
+                          <label for="mailerpassword" class="form-label">Password</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="mailersentmail" required />
+                          <label for="mailersentmail" class="form-label">Von E-Mail-Adresse</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-12">
+                        <button class="btn btn-primary" type="submit">Speichern</button>
+                      </div>
+                    </form>
+                    <br/>
+                    <div class="row">
+                      <div class="col-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="mailertestaddress"/>
+                          <label for="mailertestaddress" class="form-label">Test E-Mail-Adresse</label>
+                        </div>
+                      </div>
+                      <br/>
+                      <div class="col-12">
+                        <div id="mailertestaddresserror" style="display: none; color:red">Nachricht konnte nicht versendet werden</div>
+                      </div>
+                      <div class="col-12">
+                        <button class="btn btn-primary" type="button" id="mailertestbutton">Testen</button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="headingTwo">
+                  <button class="accordion-button collapsed" type="button" data-mdb-toggle="collapse" data-mdb-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">Connectoren</button>
+                </h2>
+                <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-mdb-parent="#accordionExample">
+                  <div class="accordion-body">
+                      <a id="connectorhubspot" class="btn btn-primary" target="_blank" href="#" role="button">Hubspot App verbinden</a>
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="headingThree">
+                  <button class="accordion-button collapsed" type="button" data-mdb-toggle="collapse" data-mdb-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">Hubspot</button>
+                </h2>
+                <div id="collapseThree" class="accordion-collapse collapse" aria-labelledby="headingThree" data-mdb-parent="#accordionExample">
+                  <div class="accordion-body">
+                    <form class="row g-3 needs-validation" novalidate>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="hubspotaccesstoken" required />
+                          <label for="hubspotaccesstoken" class="form-label">HubSpot Access Token</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="hubspotclientid" required />
+                          <label for="hubspotclientid" class="form-label">HubSpot Client Id</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="hubspotclientsecret" required />
+                          <label for="hubspotclientsecret" class="form-label">HubSpot Secret Key</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="hubspotredirecturi" required />
+                          <label for="hubspotredirecturi" class="form-label">HubSpot Redirect Url</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="hubspotconnectionaddress" required />
+                          <label for="hubspotconnectionaddress" class="form-label">HubSpot Connector Address</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-12">
+                        <button class="btn btn-primary" type="submit">Speichern</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="headingFour">
+                  <button class="accordion-button collapsed" type="button" data-mdb-toggle="collapse" data-mdb-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">LexOffice</button>
+                </h2>
+                <div id="collapseFour" class="accordion-collapse collapse" aria-labelledby="headingFour" data-mdb-parent="#accordionExample">
+                  <div class="accordion-body">
+                    <form class="row g-3 needs-validation" novalidate>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="lexofficeapikey" required />
+                          <label for="lexofficeapikey" class="form-label">Api Key</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="lexofficelogin" required />
+                          <label for="lexofficelogin" class="form-label">Login E-Mail</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="password" class="form-control" id="lexofficepassword" required />
+                          <label for="lexofficepassword" class="form-label">Login Passwort</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-12">
+                        <button class="btn btn-primary" type="submit">Speichern</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+
+
+
+              <div class="accordion-item">
+                <h2 class="accordion-header" id="headingSix">
+                  <button class="accordion-button collapsed" type="button" data-mdb-toggle="collapse" data-mdb-target="#collapseSix" aria-expanded="false" aria-controls="collapseSix">Vorlagen</button>
+                </h2>
+                <div id="collapseSix" class="accordion-collapse collapse" aria-labelledby="headingSix" data-mdb-parent="#accordionExample">
+                  <div class="accordion-body">
+                    <h2>Angebot Mail Vorlage</h2>
+                    <form class="row g-3 needs-validation" novalidate>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="offermailmailsubject" required />
+                          <label for="offermailmailsubject" class="form-label">E-Mail Betreff</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <textarea class="form-control is-valid" id="offermailmailbody" placeholder="E-Mail Text" rows="15"></textarea>
+                          <label for="offermailmailbody" class="form-label">E-Mail Text</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <br/><br/>
+                      <h2>Rechnung Mail Vorlagen</h2>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="invoicemailmailsubject" required />
+                          <label for="invoicemailmailsubject" class="form-label">E-Mail Betreff</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <textarea class="form-control is-valid" id="invoicemailmailbody" placeholder="E-Mail Text" rows="15"></textarea>
+                          <label for="invoicemailmailbody" class="form-label">E-Mail Text</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <h2>Geplanntes Lieferdatum Mail Vorlagen</h2>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <input type="text" class="form-control" id="planneddeliverydatemailsubject" required />
+                          <label for="planneddeliverydatemailsubject" class="form-label">E-Mail Betreff</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-md-12">
+                        <div class="form-outline">
+                          <textarea class="form-control is-valid" id="planneddeliverydatemailbody" placeholder="E-Mail Text" rows="15"></textarea>
+                          <label for="planneddeliverydatemailbody" class="form-label">E-Mail Text</label>
+                          <div class="invalid-feedback">Bitte geben Sie einen Wert ein</div>
+                        </div>
+                      </div>
+                      <div class="col-12">
+                        <button class="btn btn-primary" type="submit">Speichern</button>
+                      </div>
+                    </form>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+        <!-- Tabs content -->
+      </div>
+
+
+
+
+
+
+
+      
+
+      <div class="alert-message" id="alert-success">
+        <div class="alert alert-success" role="alert" data-mdb-color="success">
+          Erfolgreich gespeichert
+        </div>
+      </div>
+
+      <div class="alert-message" id="alert-error">
+        <div class="alert alert-danger" role="alert" data-mdb-color="danger">
+          Nicht gespeichert
+        </div>
+      </div>
+      
+
+      <!-- JS Scripte -->
+      
+      <!-- MDB -->
+      <script type="text/javascript" src="https://code.jquery.com/jquery-3.5.1.js"></script>  
+      <script type="text/javascript" src="https://cdn.datatables.net/1.13.4/js/jquery.dataTables.min.js"></script>  
+      <script type="text/javascript" src="//gyrocode.github.io/jquery-datatables-checkboxes/1.2.12/js/dataTables.checkboxes.min.js"></script>
+      <script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/mdb-ui-kit/6.1.0/mdb.min.js"></script>
+      <script type="text/javascript" src="public/administrator/helper.js"></script>  
+  </body>
+</html>
