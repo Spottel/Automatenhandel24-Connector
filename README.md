@@ -74,6 +74,15 @@ npm run start
 npm run initUser --username=admin@admin.de --password=1234
 ```
 
+7. setup lexoffice webhooks
+
+```
+npm run lexOfficeEvents --type=getAllEventsListeners
+npm run lexOfficeEvents --type=createEventListener --url=https://domain.com/lexofficewebhook --eventtype=quotation.status.changed
+npm run lexOfficeEvents --type=createEventListener --url=https://domain.com/lexofficewebhook --eventtype=invoice.status.changed
+npm run lexOfficeEvents --type=deleteEventListener --id=618348c0-516a-4d14-8751-c660466d9f0f
+```
+
 <br />
 
 ### run remotely via docker:
@@ -90,6 +99,15 @@ docker run -d --name=automatenhandel24 -p 17400:7125 -v /path/to/docker.sock:/va
 
 ```
 docker exec automatenhandel24 sh -c 'npm run initUser --username=admin@admin.de --password=1234'
+```
+
+4. setup lexoffice webhooks
+
+```
+docker exec automatenhandel24 sh -c 'npm run lexOfficeEvents --type=getAllEventsListeners'
+docker exec automatenhandel24 sh -c 'npm run lexOfficeEvents --type=createEventListener --url=https://domain.com/lexofficewebhook --eventtype=quotation.status.changed'
+docker exec automatenhandel24 sh -c 'npm run lexOfficeEvents --type=createEventListener --url=https://domain.com/lexofficewebhook --eventtype=invoice.status.changed'
+docker exec automatenhandel24 sh -c 'npm run lexOfficeEvents --type=deleteEventListener --id=618348c0-516a-4d14-8751-c660466d9f0f'
 ```
 
 <br />
