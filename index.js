@@ -392,6 +392,7 @@ app.get('/registerHubSpotApp', async (req, res) => {
  */
 app.post('/hubspotwebhook', async (req, res) => {
   var body = req.body[0];
+  console.log(body);
 
   if(req.headers['x-hubspot-signature'] && body['attemptNumber'] == 0){
     var hash = crypto.createHash('sha256');
@@ -662,7 +663,7 @@ app.post('/hubspotwebhook', async (req, res) => {
           try {
             const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
             var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties, undefined, associations, false, undefined);
-
+console.log(dealData);
             // Load Contact Data
             var contactId = dealData.associations.contacts.results[0].id;
 
@@ -834,14 +835,12 @@ app.post('/hubspotwebhook', async (req, res) => {
                   invoiceData.paymentConditions.paymentTermLabel = "Finanzierung";
                 }
 
-                const createdInvoiceResult = await lexOfficeClient.createInvoice(invoiceData, { finalize: true });
+                const createdInvoiceResult = await lexOfficeClient.createInvoice(invoiceData, { finalize: false});
 
                 if (createdInvoiceResult.ok) {
                   const createdInvoiceResultFile = await lexOfficeClient.renderInvoiceDocumentFileId(createdInvoiceResult.val.id);
                   if (createdInvoiceResultFile.ok) {
                     const downloadFile = await lexOfficeClient.downloadFile(createdInvoiceResultResultFile.val.documentFileId);
-
-
 
                     const browser = await playwright.firefox.launch({headless: true})
                     const page = await browser.newPage();
@@ -1033,7 +1032,12 @@ app.post('/hubspotwebhook', async (req, res) => {
               await page.click("text=Alle akzeptieren");
               await page.click("text=ANMELDEN");
               await page.waitForLoadState('networkidle');
-              await page.click("text=Als angenommen markieren");
+
+              var elements = await page.locator("text=Als angenommen markieren").count();
+              if(elements != 0){           
+                await page.click("text=Als angenommen markieren");
+              }
+             
               await browser.close();
 
             } catch (err) {
@@ -1064,8 +1068,14 @@ app.post('/hubspotwebhook', async (req, res) => {
               await page.click("text=Alle akzeptieren");
               await page.click("text=ANMELDEN");
               await page.waitForLoadState('networkidle');
-              await page.click('a:has(.grld-icon-proceed)');
-              await page.click('a:has-text(" Als abgelehnt markieren")');            
+
+              var elements = await page.locator("a:has(.grld-icon-proceed)").count();
+              if(elements != 0){           
+                var elements = await page.locator(" Als abgelehnt markieren").count();
+                if(elements != 0){           
+                  await page.click('a:has-text(" Als abgelehnt markieren")');   
+                }
+              }        
               await browser.close();
             } catch (err) {
               errorlogging.saveError("error", "hubspot", "Error to load the Deal Data ("+dealId+")", "");
