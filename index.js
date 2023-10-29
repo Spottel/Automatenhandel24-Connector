@@ -834,7 +834,7 @@ app.post('/hubspotwebhook', async (req, res) => {
                   invoiceData.paymentConditions.paymentTermLabel = "Finanzierung";
                 }
 
-                const createdInvoiceResult = await lexOfficeClient.createInvoice(invoiceData, { finalize: false });
+                const createdInvoiceResult = await lexOfficeClient.createInvoice(invoiceData, { finalize: true });
 
                 if (createdInvoiceResult.ok) {
                   const createdInvoiceResultFile = await lexOfficeClient.renderInvoiceDocumentFileId(createdInvoiceResult.val.id);
