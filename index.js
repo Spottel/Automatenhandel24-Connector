@@ -19,6 +19,8 @@ require('dotenv').config();
 const lexoffice = require('@elbstack/lexoffice-client-js');
 const playwright = require("playwright");
 
+const fs = require('fs')
+
 
 // ------------------------------------------
 // Middlewares
@@ -1091,111 +1093,150 @@ app.post('/hubspotwebhook', async (req, res) => {
 // LexOffice Routes
 // ------------------------------------------
 
+
 /** 
- * Cronjob check status of offer and invoice
+ * Post route for the hubspot webhook
  * 
  */
-cron.schedule('* * * * *', async function() {
+app.post('/lexofficewebhook', async (req, res) => {
   const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
 
   // LexOffice Api Client
-  const lexOfficeClient = new lexoffice.Client(await settings.getSettingData('lexofficeapikey'));
+  const lexOfficeClient = new lexoffice.Client(await settings.getSettingData('lexofficeapikey'))
 
   dayjs.extend(utc)
   dayjs.extend(timezone)
   var date = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD HH:mm:ss');
 
-  // Check Offer
-  var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"offerid", "operator":"HAS_PROPERTY"}, {"propertyName":"offeragree", "operator":"NOT_HAS_PROPERTY"}, {"propertyName":"offerdisagree", "operator":"NOT_HAS_PROPERTY"}]}], limit: 1, after: 0 };
+  var body = req.body;
 
-  try {
-    var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);     
-    
-    for(var i=0; i<apiResponse.results.length;i++){
-      var dealId = apiResponse.results[i].id;
-      var properties = ["offerid", "zahlungs_art"];
-      var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
+  if(req.headers['x-lxo-signature']){
+    const keyContent = fs.readFileSync("./lexOfficePublicKey.pub").toString();
 
-      const offerResult = await lexOfficeClient.retrieveQuotation(dealData.properties.offerid);
+    // Converting string to buffer
+    let data = JSON.stringify(req.body);
+    var signature = req.headers['x-lxo-signature'];
+    signature = signature.replace(/.{64}/g, '$&\n');
 
-      if(offerResult.ok){
-        if(offerResult.val.voucherStatus == "accepted"){
-          var properties = {
-            "offeragree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-            "offerdisagree": ""
-          };
+    // Verifying signature using crypto.verify() function
+    let isVerified = crypto.verify("sha512", data, keyContent, Buffer.from(signature, 'base64'));   
 
-          if(dealData.properties.zahlungs_art == "Direktzahlung"){
-            properties.dealstage = "363483638";
-          }else{
-            properties.dealstage = "363483637";
+    if(isVerified){
+      // Check Offer Status
+      if(body.eventType == "quotation.status.changed"){
+        const offerResult = await lexOfficeClient.retrieveQuotation(body.resourceId);
+
+        if(offerResult.ok){
+          if(offerResult.val.voucherStatus == "accepted"){
+            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"offerid", "operator":"EQ", "value":body.resourceId}, {"propertyName":"offeragree", "operator":"NOT_HAS_PROPERTY"}]}], limit: 1, after: 0 };
+            
+            try {
+              var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);  
+
+              if(apiResponse.results.length != 0){
+                var dealId = apiResponse.results[0].id;
+
+                var properties = ["offerid", "zahlungs_art"];
+                var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
+
+                var properties = {
+                  "offeragree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
+                  "offerdisagree": ""
+                };
+      
+                if(dealData.properties.zahlungs_art == "Direktzahlung"){
+                  properties.dealstage = "363483638";
+                }else{
+                  properties.dealstage = "363483637";
+                }
+      
+                var SimplePublicObjectInput = { properties };
+                await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
+              }
+            } catch (err) {
+              console.log(date+" - "+err);
+            }   
+
+          }else if(offerResult.val.voucherStatus == "rejected"){
+            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"offerid", "operator":"EQ", "value":body.resourceId}, {"propertyName":"offerdisagree", "operator":"NOT_HAS_PROPERTY"}]}], limit: 1, after: 0 };
+            
+            try {
+              var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);
+
+              if(apiResponse.results.length != 0){
+                var dealId = apiResponse.results[0].id;
+
+                var properties = ["offerid", "zahlungs_art"];
+                var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
+
+                var properties = {
+                  "offerdisagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
+                  "offeragree": "",
+                  "dealstage": "closedlost"
+                };
+                var SimplePublicObjectInput = { properties };
+                await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined); 
+              }  
+              
+            } catch (err) {
+              console.log(date+" - "+err);
+            }  
           }
+        }
+      }
 
-          var SimplePublicObjectInput = { properties };
-          await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
-        }else if(offerResult.val.voucherStatus == "rejected"){
-          var properties = {
-            "offerdisagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-            "offeragree": "",
-            "dealstage": "closedlost"
-          };
-          var SimplePublicObjectInput = { properties };
-          await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined); 
+      // Check Offer Status
+      if(body.eventType == "invoice.status.changed"){
+        const invoiceResult = await lexOfficeClient.retrieveInvoice(body.resourceId);
+
+        if(invoiceResult.ok){
+          if(invoiceResult.val.voucherStatus == "paid"){
+            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"invoiceid", "operator":"EQ", "value":body.resourceId}, {"propertyName":"invoiceagree", "operator":"NOT_HAS_PROPERTY"}]}], limit: 1, after: 0 };
+            
+            try {
+              var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);  
+
+              if(apiResponse.results.length != 0){
+                var dealId = apiResponse.results[0].id;
+
+                var properties = {
+                  "invoiceagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
+                  "invoicedisagree": "",
+                  "dealstage": "363483639"
+                };
+      
+                var SimplePublicObjectInput = { properties };
+                await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);
+              }
+            } catch (err) {
+              console.log(date+" - "+err);
+            }  
+          }else if(invoiceResult.val.voucherStatus == "voided"){
+            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"invoiceid", "operator":"EQ", "value":body.resourceId}, {"propertyName":"invoicedisagree", "operator":"NOT_HAS_PROPERTY"}]}], limit: 1, after: 0 };
+            
+            try {
+              var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);  
+
+              if(apiResponse.results.length != 0){
+                var dealId = apiResponse.results[0].id;
+
+                var properties = {
+                  "invoicedisagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
+                  "invoiceagree": "",
+                  "dealstage": "closedlost"
+                };
+                var SimplePublicObjectInput = { properties };
+                await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined); 
+              }
+            } catch (err) {
+              console.log(date+" - "+err);
+            }  
+          }
         }
       }
     }
-  } catch (err) {
-    console.log(date+" - "+err);
-  }  
-
-
-  // Check Invoices
-  var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"invoiceid", "operator":"HAS_PROPERTY"}, {"propertyName":"invoiceagree", "operator":"NOT_HAS_PROPERTY"}, {"propertyName":"invoicedisagree", "operator":"NOT_HAS_PROPERTY"}]}], limit: 1, after: 0 };
-
-  try {
-    var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);     
-    
-    for(var i=0; i<apiResponse.results.length;i++){
-      var dealId = apiResponse.results[i].id;
-      var properties = ["invoiceid", "zahlungs_art"];
-      var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
-
-      const invoiceResult = await lexOfficeClient.retrieveInvoice(dealData.properties.invoiceid);
-
-      if(invoiceResult.ok){
-        if(invoiceResult.val.voucherStatus == "paid"){
-          var properties = {
-            "invoiceagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-            "invoicedisagree": "",
-            "dealstage": "363483639"
-          };
-
-          var SimplePublicObjectInput = { properties };
-          await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
-        }else if(invoiceResult.val.voucherStatus == "voided"){
-          var properties = {
-            "invoicedisagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-            "invoiceagree": "",
-            "dealstage": "closedlost"
-          };
-          var SimplePublicObjectInput = { properties };
-          await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined); 
-        }
-      }
-    }
-  } catch (err) {
-    console.log(date+" - "+err);
-  }  
+  }
 });
-
-
-
-
-
-
-
-
-
 
 
 // ------------------------------------------
