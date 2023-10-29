@@ -392,7 +392,6 @@ app.get('/registerHubSpotApp', async (req, res) => {
  */
 app.post('/hubspotwebhook', async (req, res) => {
   var body = req.body[0];
-  console.log(body);
 
   if(req.headers['x-hubspot-signature'] && body['attemptNumber'] == 0){
     var hash = crypto.createHash('sha256');
@@ -663,7 +662,7 @@ app.post('/hubspotwebhook', async (req, res) => {
           try {
             const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
             var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties, undefined, associations, false, undefined);
-console.log(dealData);
+
             // Load Contact Data
             var contactId = dealData.associations.contacts.results[0].id;
 
