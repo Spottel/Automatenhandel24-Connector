@@ -840,7 +840,7 @@ console.log(dealData);
                 if (createdInvoiceResult.ok) {
                   const createdInvoiceResultFile = await lexOfficeClient.renderInvoiceDocumentFileId(createdInvoiceResult.val.id);
                   if (createdInvoiceResultFile.ok) {
-                    const downloadFile = await lexOfficeClient.downloadFile(createdInvoiceResultResultFile.val.documentFileId);
+                    const downloadFile = await lexOfficeClient.downloadFile(createdInvoiceResultFile.val.documentFileId);
 
                     const browser = await playwright.firefox.launch({headless: true})
                     const page = await browser.newPage();
