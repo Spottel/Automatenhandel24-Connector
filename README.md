@@ -1,6 +1,6 @@
 <div align='center'>
     <h1><b>Automatenhandel24 Connector</b></h1>
-    <img src='https://raw.githubusercontent.com/Spottel/Automatenhandel24-Connector/master/public/administrator/logo.png' width='250' height='250' />
+    <img src='https://raw.githubusercontent.com/Spottel/Automatenhandel24-Connector/master/public/administrator/logo.png' height='250' />
     <p>The Automatenhandel24 Connector to connect Hubspot with LexOffice</p>
 
 
