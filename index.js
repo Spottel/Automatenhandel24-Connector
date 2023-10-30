@@ -1137,7 +1137,7 @@ app.post('/lexofficewebhook', async (req, res) => {
 
         if(offerResult.ok){
           if(offerResult.val.voucherStatus == "accepted"){
-            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"offerid", "operator":"EQ", "value":body.resourceId}, {"propertyName":"offeragree", "operator":"NOT_HAS_PROPERTY"}]}], limit: 1, after: 0 };
+            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"offerid", "operator":"EQ", "value":body.resourceId}]}], limit: 1, after: 0 };
             
             try {
               var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);  
@@ -1170,7 +1170,7 @@ app.post('/lexofficewebhook', async (req, res) => {
             }   
 
           }else if(offerResult.val.voucherStatus == "rejected"){
-            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"offerid", "operator":"EQ", "value":body.resourceId}, {"propertyName":"offerdisagree", "operator":"NOT_HAS_PROPERTY"}]}], limit: 1, after: 0 };
+            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"offerid", "operator":"EQ", "value":body.resourceId}]}], limit: 1, after: 0 };
             
             try {
               var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);
@@ -1209,7 +1209,7 @@ app.post('/lexofficewebhook', async (req, res) => {
 
         if(invoiceResult.ok){
           if(invoiceResult.val.voucherStatus == "paid"){
-            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"invoiceid", "operator":"EQ", "value":body.resourceId}, {"propertyName":"invoiceagree", "operator":"NOT_HAS_PROPERTY"}]}], limit: 1, after: 0 };
+            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"invoiceid", "operator":"EQ", "value":body.resourceId}]}], limit: 1, after: 0 };
             
             try {
               var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);  
@@ -1237,7 +1237,7 @@ app.post('/lexofficewebhook', async (req, res) => {
               console.log(date+" - "+err);
             }  
           }else if(invoiceResult.val.voucherStatus == "voided"){
-            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"invoiceid", "operator":"EQ", "value":body.resourceId}, {"propertyName":"invoicedisagree", "operator":"NOT_HAS_PROPERTY"}]}], limit: 1, after: 0 };
+            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"propertyName":"invoiceid", "operator":"EQ", "value":body.resourceId}]}], limit: 1, after: 0 };
             
             try {
               var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);  
