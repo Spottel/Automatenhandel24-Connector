@@ -1145,14 +1145,15 @@ app.post('/lexofficewebhook', async (req, res) => {
               if(apiResponse.results.length != 0){
                 var dealId = apiResponse.results[0].id;
 
-                var properties = ["offerid", "zahlungs_art", "dealstage"];
+                var properties = ["offerid", "zahlungs_art", "dealstage", "offeragree"];
                 var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
 
                 if(dealData.properties.dealstage != "363483638" && dealData.properties.dealstage != "363483637"){
-                  var properties = {
-                    "offeragree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-                    "offerdisagree": ""
-                  };
+                  var properties = {};
+
+                  if(properties.offeragree == ""){
+                    properties.offeragree = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD');
+                  }
 
                   if(dealData.properties.zahlungs_art == "Direktzahlung"){
                     properties.dealstage = "363483638";
@@ -1177,13 +1178,17 @@ app.post('/lexofficewebhook', async (req, res) => {
               if(apiResponse.results.length != 0){
                 var dealId = apiResponse.results[0].id;
 
-                var properties = ["offerid", "zahlungs_art", "dealstage"];
+                var properties = ["offerid", "zahlungs_art", "dealstage", "offerdisagree"];
                 var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
 
                 if(dealData.properties.dealstage != "closedlost"){
+                  var properties = {};
+
+                  if(properties.offerdisagree == ""){
+                    properties.offerdisagree = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD');
+                  }
+
                   var properties = {
-                    "offerdisagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-                    "offeragree": "",
                     "dealstage": "closedlost"
                   };
                   var SimplePublicObjectInput = { properties };
@@ -1212,15 +1217,17 @@ app.post('/lexofficewebhook', async (req, res) => {
               if(apiResponse.results.length != 0){
                 var dealId = apiResponse.results[0].id;
 
-                var properties = ["dealstage"];
+                var properties = ["dealstage", "invoiceagree"];
                 var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
 
                 if(dealData.properties.dealstage != "363483639"){
-                  var properties = {
-                    "invoiceagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-                    "invoicedisagree": "",
-                    "dealstage": "363483639"
-                  };
+                  var properties = {};
+
+                  if(properties.invoiceagree == ""){
+                    properties.invoiceagree = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD');
+                  }
+                  
+                  properties.dealstage = "363483639";
         
                   var SimplePublicObjectInput = { properties };
                   await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);
@@ -1238,15 +1245,18 @@ app.post('/lexofficewebhook', async (req, res) => {
               if(apiResponse.results.length != 0){
                 var dealId = apiResponse.results[0].id;
 
-                var properties = ["dealstage"];
+                var properties = ["dealstage", "invoicedisagree"];
                 var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
 
                 if(dealData.properties.dealstage != "closedlost"){
-                  var properties = {
-                    "invoicedisagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-                    "invoiceagree": "",
-                    "dealstage": "closedlost"
-                  };
+                  var properties = {};
+
+                  if(properties.invoicedisagree == ""){
+                    properties.invoicedisagree = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD');
+                  }
+                  
+                  properties.dealstage = "closedlost";
+
                   var SimplePublicObjectInput = { properties };
                   await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined); 
                 }
