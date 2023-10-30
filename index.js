@@ -1145,22 +1145,24 @@ app.post('/lexofficewebhook', async (req, res) => {
               if(apiResponse.results.length != 0){
                 var dealId = apiResponse.results[0].id;
 
-                var properties = ["offerid", "zahlungs_art"];
+                var properties = ["offerid", "zahlungs_art", "dealstage"];
                 var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
 
-                var properties = {
-                  "offeragree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-                  "offerdisagree": ""
-                };
-      
-                if(dealData.properties.zahlungs_art == "Direktzahlung"){
-                  properties.dealstage = "363483638";
-                }else{
-                  properties.dealstage = "363483637";
+                if(dealData.properties.dealstage != "363483638" && dealData.properties.dealstage != "363483637"){
+                  var properties = {
+                    "offeragree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
+                    "offerdisagree": ""
+                  };
+
+                  if(dealData.properties.zahlungs_art == "Direktzahlung"){
+                    properties.dealstage = "363483638";
+                  }else{
+                    properties.dealstage = "363483637";
+                  }
+        
+                  var SimplePublicObjectInput = { properties };
+                  await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
                 }
-      
-                var SimplePublicObjectInput = { properties };
-                await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
               }
             } catch (err) {
               console.log(date+" - "+err);
@@ -1175,16 +1177,18 @@ app.post('/lexofficewebhook', async (req, res) => {
               if(apiResponse.results.length != 0){
                 var dealId = apiResponse.results[0].id;
 
-                var properties = ["offerid", "zahlungs_art"];
+                var properties = ["offerid", "zahlungs_art", "dealstage"];
                 var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
 
-                var properties = {
-                  "offerdisagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-                  "offeragree": "",
-                  "dealstage": "closedlost"
-                };
-                var SimplePublicObjectInput = { properties };
-                await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined); 
+                if(dealData.properties.dealstage != "closedlost"){
+                  var properties = {
+                    "offerdisagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
+                    "offeragree": "",
+                    "dealstage": "closedlost"
+                  };
+                  var SimplePublicObjectInput = { properties };
+                  await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined); 
+                }
               }  
               
             } catch (err) {
@@ -1208,14 +1212,19 @@ app.post('/lexofficewebhook', async (req, res) => {
               if(apiResponse.results.length != 0){
                 var dealId = apiResponse.results[0].id;
 
-                var properties = {
-                  "invoiceagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-                  "invoicedisagree": "",
-                  "dealstage": "363483639"
-                };
-      
-                var SimplePublicObjectInput = { properties };
-                await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);
+                var properties = ["dealstage"];
+                var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
+
+                if(dealData.properties.dealstage != "363483639"){
+                  var properties = {
+                    "invoiceagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
+                    "invoicedisagree": "",
+                    "dealstage": "363483639"
+                  };
+        
+                  var SimplePublicObjectInput = { properties };
+                  await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);
+                }
               }
             } catch (err) {
               console.log(date+" - "+err);
@@ -1229,13 +1238,18 @@ app.post('/lexofficewebhook', async (req, res) => {
               if(apiResponse.results.length != 0){
                 var dealId = apiResponse.results[0].id;
 
-                var properties = {
-                  "invoicedisagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-                  "invoiceagree": "",
-                  "dealstage": "closedlost"
-                };
-                var SimplePublicObjectInput = { properties };
-                await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined); 
+                var properties = ["dealstage"];
+                var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties);
+
+                if(dealData.properties.dealstage != "closedlost"){
+                  var properties = {
+                    "invoicedisagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
+                    "invoiceagree": "",
+                    "dealstage": "closedlost"
+                  };
+                  var SimplePublicObjectInput = { properties };
+                  await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined); 
+                }
               }
             } catch (err) {
               console.log(date+" - "+err);
