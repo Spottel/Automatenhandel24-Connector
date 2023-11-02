@@ -1271,6 +1271,93 @@ app.post('/lexofficewebhook', async (req, res) => {
   }
 });
 
+/** 
+ * Check LexOffice Contact
+ * 
+ */
+cron.schedule('0 0 * * *', async function() {
+  const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
+
+  // LexOffice Api Client
+  const lexOfficeClient = new lexoffice.Client(await settings.getSettingData('lexofficeapikey'));
+
+  var contactsResult = await lexOfficeClient.filterContact({page:0, size:200});
+
+  if(contactsResult.ok){
+    var totalPages = contactsResult.val.totalPages;
+
+    for(var i=0; i<=totalPages; i++){
+      var contactsResult = await lexOfficeClient.filterContact({page:i, size:200});
+      if(contactsResult.ok){
+        var contactsResultData = contactsResult.val.content;
+
+        for(var a=0; a<contactsResultData.length; a++){
+          if(contactsResultData[a].emailAddresses){
+            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": contactsResultData[a].emailAddresses.business[0], "propertyName":"email","operator":"EQ"}]}], properties:["email"], limit: 100, after: 0 };
+
+            try {
+              var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);   
+
+              if(!apiResponse.results[0]){
+                var properties = {
+                  "email": contactsResultData[a].emailAddresses.business[0]
+                };
+
+                if(contactsResultData[a].company){
+                  properties.company = contactsResultData[a].company.name;
+                }
+
+                if(contactsResultData[a].phoneNumbers){
+                  if(contactsResultData[a].phoneNumbers.business){
+                    properties.phone = contactsResultData[a].phoneNumbers.business[0];
+                  }
+                }
+
+                if(contactsResultData[a].person){
+                  if(contactsResultData[a].person.firstName){
+                    properties.firstname = contactsResultData[a].person.firstName;
+                  }
+
+                  if(contactsResultData[a].person.lastName){
+                    properties.lastname = contactsResultData[a].person.lastName;
+                  }
+                }
+
+                if(contactsResultData[a].addresses.billing){
+                  if(contactsResultData[a].addresses.billing[0].street){
+                    properties.address = contactsResultData[a].addresses.billing[0].street;
+                  }
+
+                  if(contactsResultData[a].addresses.billing[0].zip){
+                    properties.zip = contactsResultData[a].addresses.billing[0].zip;
+                  }
+
+                  if(contactsResultData[a].addresses.billing[0].city){
+                    properties.city = contactsResultData[a].addresses.billing[0].city;
+                  }
+
+                  if(contactsResultData[a].addresses.billing[0].countryCode){
+                    if(contactsResultData[a].addresses.billing[0].countryCode == "DE"){
+                      properties.country = "Deutschland";
+                    }
+                  }
+                }
+
+
+                var SimplePublicObjectInput = { properties };
+                var apiResponse = await hubspotClient.crm.contacts.basicApi.create(SimplePublicObjectInput); 
+              }
+            }catch (err){
+
+            }
+          }
+        }
+      }
+    }
+  }
+  console.log("Import completed");
+});
+
 
 // ------------------------------------------
 // Module Function
