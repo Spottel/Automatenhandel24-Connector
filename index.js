@@ -1553,6 +1553,7 @@ app.post('/lexofficewebhook', async (req, res) => {
                           await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [invoiceResult.val.id, apiResponse.results[0].id]);
                         }
                       }else{
+                        /*
                         var properties = {
                           "invoiceid": invoiceResult.val.id,
                           "invoicecreateat": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
@@ -1594,6 +1595,7 @@ app.post('/lexofficewebhook', async (req, res) => {
                           }
                         }
                         var updateAssociations = await hubspotClient.crm.contacts.associationsApi.create(apiResponse.results[0].id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 4}]);         
+                        */
                       }
                     }
                   }catch (err){
