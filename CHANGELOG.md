@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.2.0...v1.3.0) (2023-11-05)
+
+
+### Features
+
+* :sparkles: Add different feature ([fd63f45](https://github.com/Spottel/Automatenhandel24-Connector/commit/fd63f453101ef6532dd9c5cecfef5c6cabfd1ca1))
+
 ## [1.2.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.1.0...v1.2.0) (2023-11-02)
 
 
