@@ -32,6 +32,7 @@ const database = databaseConnector.getConnection();
 const settings = require('./middleware/settings.js');
 const mailer = require('./middleware/mailer.js');
 const errorlogging = require('./middleware/errorlogging.js');
+const { CollectionResponseFolder } = require('@hubspot/api-client/lib/codegen/files/index.js');
 
 // ------------------------------------------
 // Basic Web Server
@@ -406,243 +407,259 @@ app.post('/hubspotwebhook', async (req, res) => {
     // LexOffice Api Client
     const lexOfficeClient = new lexoffice.Client(await settings.getSettingData('lexofficeapikey'))
 
-
     if(gen_hash == req.headers['x-hubspot-signature']){
       if (body.subscriptionType) {      
         // Send Offer
-        if (body.subscriptionType == "deal.propertyChange" && body.propertyName == "dealstage" && body.propertyValue == "363483635") {
+        if (body.subscriptionType == "deal.propertyChange" && body.propertyName == "dealstage" && body.propertyValue == "363483635") {          
           var dealId = body.objectId;
 
           // Lead Deal Data
-          var properties = [];
+          var properties = ["offerid"];
           var associations = ["contact", "product", "line_items"];
 
           try {
             const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
             var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties, undefined, associations, false, undefined);
 
-            // Load Contact Data
-            var contactId = dealData.associations.contacts.results[0].id;
+            var result = await database.awaitQuery(`SELECT * FROM lexoffice_hubspot WHERE deal_id = ? AND document_id = ? AND over_lexoffice = 1`, [dealId, dealData.properties.offerid]);
+  
+            if(result.length != 0){
+              await database.awaitQuery(`UPDATE lexoffice_hubspot SET over_lexoffice = 0 WHERE deal_id = ? AND document_id = ?`, [dealId, dealData.properties.offerid]);
+            }else{
+              // Load Contact Data
+              var contactId = dealData.associations.contacts.results[0].id;
 
-            var properties = ["email", "firstname", "lastname", "company", "address", "zip", "city", "salutation"];
-            
-            try {
-              var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
+              var properties = ["email", "firstname", "lastname", "company", "address", "zip", "city", "salutation"];
+              
+              try {
+                var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
 
-              // Check Contact LexOffice
-              const contactResult = await lexOfficeClient.filterContact({"email": contactData.properties.email});
+                // Check Contact LexOffice
+                const contactResult = await lexOfficeClient.filterContact({"email": contactData.properties.email});
 
-              if(contactResult.ok){
-                var contactId = '';
-                if(contactResult.val.numberOfElements != 0){
-                  contactId = contactResult.val.content[0].id;
-                }else{
-                  // Create LexOffice Contact
-                  var contactObject = {
-                    "version": 0,
-                    "roles": {
-                      "customer": {
+                if(contactResult.ok){
+                  var contactId = '';
+                  if(contactResult.val.numberOfElements != 0){
+                    contactId = contactResult.val.content[0].id;
+                  }else{
+                    // Create LexOffice Contact
+                    var contactObject = {
+                      "version": 0,
+                      "roles": {
+                        "customer": {
+                        }
+                      }
+                    };
+
+
+                    if(contactData.properties.company != null){
+                      contactObject.company = {
+                        "emailAddress": contactData.properties.email,
+                        "name": contactData.properties.company,
+                        "contactPersons": [
+                            {
+                              "salutation": contactData.properties.salutation,
+                              "firstName": contactData.properties.firstname,
+                              "lastName": contactData.properties.lastname,
+                              "primary": true,
+                              "emailAddress": contactData.properties.email
+                            }
+                        ]
+                      }
+                    }else{
+                      contactObject.person = {
+                        "salutation": contactData.properties.salutation,
+                        "firstName": contactData.properties.firstname,
+                        "lastName": contactData.properties.lastname
                       }
                     }
-                  };
 
-
-                  if(contactData.properties.company != null){
-                    contactObject.company = {
-                      "emailAddress": contactData.properties.email,
-                      "name": contactData.properties.company,
-                      "contactPersons": [
+                    
+                    contactObject.addresses = {
+                      "billing": [
                           {
-                            "salutation": contactData.properties.salutation,
-                            "firstName": contactData.properties.firstname,
-                            "lastName": contactData.properties.lastname,
-                            "primary": true,
-                            "emailAddress": contactData.properties.email
+                              "street": contactData.properties.address,
+                              "zip": contactData.properties.zip,
+                              "city": contactData.properties.city,
+                              "countryCode": "DE"
                           }
                       ]
-                    }
-                  }else{
-                    contactObject.person = {
-                      "salutation": contactData.properties.salutation,
-                      "firstName": contactData.properties.firstname,
-                      "lastName": contactData.properties.lastname
-                    }
+                    };
+
+                    contactObject.emailAddresses =  {
+                      "business": [
+                        contactData.properties.email
+                      ]
+                    };
+                                    
+                    const contactResult = await lexOfficeClient.createContact(contactObject);
+                    contactId = contactResult.val.id;
                   }
 
-                  
-                  contactObject.addresses = {
-                    "billing": [
-                        {
-                            "street": contactData.properties.address,
-                            "zip": contactData.properties.zip,
-                            "city": contactData.properties.city,
-                            "countryCode": "DE"
-                        }
-                    ]
+                
+                  // Create Offer
+                  dayjs.extend(utc)
+                  dayjs.extend(timezone)
+                  var voucherDate = dayjs().tz("Europe/Berlin");
+                  var expirationDate = dayjs().add(3, 'day').tz("Europe/Berlin");
+
+                  // Item List
+                  var productList = dealData.associations['line items'].results;
+
+                  var productListArray = [];
+
+                  var totalPrice = {
+                      "currency": "EUR",
+                      "totalNetAmount": 0,
+                      "totalGrossAmount": 0,
+                      "totalTaxAmount": 0
                   };
 
-                  contactObject.emailAddresses =  {
-                    "business": [
-                      contactData.properties.email
-                    ]
-                  };
-                                   
-                  const contactResult = await lexOfficeClient.createContact(contactObject);
-                  contactId = contactResult.val.id;
-                }
+                  var taxAmounts = [];
 
+                  for(var i=0; i<productList.length; i++){
+                    var lineItemData = await hubspotClient.crm.lineItems.basicApi.getById(productList[i].id );
 
-                // Create Offer
-                dayjs.extend(utc)
-                dayjs.extend(timezone)
-                var voucherDate = dayjs().tz("Europe/Berlin");
-                var expirationDate = dayjs().add(3, 'day').tz("Europe/Berlin");
+                    var properties = ["name", "description", "price", "steuer_satz"];
+                    var productData = await hubspotClient.crm.products.basicApi.getById(lineItemData.properties.hs_product_id, properties );
 
-                // Item List
-                var productList = dealData.associations['line items'].results;
+                    var taxRate = productData.properties.steuer_satz;
+                    taxRate = parseFloat(taxRate.replace(" %", ""));
 
-                var productListArray = [];
+                    netAmount = parseFloat(productData.properties.price);
+                    taxAmount = (netAmount/100*taxRate);
+                    grossAmount = taxAmount+netAmount;
 
-                var totalPrice = {
-                    "currency": "EUR",
-                    "totalNetAmount": 0,
-                    "totalGrossAmount": 0,
-                    "totalTaxAmount": 0
-                };
+                    totalPrice.totalNetAmount = totalPrice.totalNetAmount+netAmount;
+                    totalPrice.totalGrossAmount = totalPrice.totalGrossAmount+grossAmount;
+                    totalPrice.totalTaxAmount = totalPrice.totalTaxAmount+taxAmount;
 
-                var taxAmounts = [];
-
-                for(var i=0; i<productList.length; i++){
-                  var lineItemData = await hubspotClient.crm.lineItems.basicApi.getById(productList[i].id );
-
-                  var properties = ["name", "description", "price", "steuer_satz"];
-                  var productData = await hubspotClient.crm.products.basicApi.getById(lineItemData.properties.hs_product_id, properties );
-
-                  var taxRate = productData.properties.steuer_satz;
-                  taxRate = parseFloat(taxRate.replace(" %", ""));
-
-                  netAmount = parseFloat(productData.properties.price);
-                  taxAmount = (netAmount/100*taxRate);
-                  grossAmount = taxAmount+netAmount;
-
-                  totalPrice.totalNetAmount = totalPrice.totalNetAmount+netAmount;
-                  totalPrice.totalGrossAmount = totalPrice.totalGrossAmount+grossAmount;
-                  totalPrice.totalTaxAmount = totalPrice.totalTaxAmount+taxAmount;
-
-                  var foundTaxes = -1;
-                  for(var a=0; a<taxAmounts.length; a++){
-                    if(taxAmounts[a].taxRatePercentage == taxRate){
-                      foundTaxes = a;
+                    var foundTaxes = -1;
+                    for(var a=0; a<taxAmounts.length; a++){
+                      if(taxAmounts[a].taxRatePercentage == taxRate){
+                        foundTaxes = a;
+                      }
                     }
-                  }
 
-                  if(foundTaxes >= 0){
-                    taxAmounts[foundTaxes].taxAmount = parseFloat(taxAmounts[foundTaxes].taxAmount)+parseFloat(taxAmount);
-                    taxAmounts[foundTaxes].netAmount = parseFloat(taxAmounts[foundTaxes].netAmount)+parseFloat(netAmount);
-                  }else{
-                    taxAmounts.push({
-                        "taxRatePercentage": taxRate,
-                        "taxAmount": taxAmount,
-                        "netAmount": netAmount
+                    if(foundTaxes >= 0){
+                      taxAmounts[foundTaxes].taxAmount = parseFloat(taxAmounts[foundTaxes].taxAmount)+parseFloat(taxAmount);
+                      taxAmounts[foundTaxes].netAmount = parseFloat(taxAmounts[foundTaxes].netAmount)+parseFloat(netAmount);
+                    }else{
+                      taxAmounts.push({
+                          "taxRatePercentage": taxRate,
+                          "taxAmount": taxAmount,
+                          "netAmount": netAmount
+                      });
+                    }
+
+                    productListArray.push({
+                      "type": "custom",
+                      "name": productData.properties.name,
+                      "description": productData.properties.description,
+                      "quantity": lineItemData.properties.quantity,
+                      "unitName": "Stück",
+                      "unitPrice": {
+                          "currency": "EUR",
+                          "netAmount": netAmount,
+                          "grossAmount": grossAmount,
+                          "taxRatePercentage": 19
+                      },
+                      "discountPercentage": 0,
+                      "lineItemAmount": grossAmount,
+                      "alternative": false,
+                      "optional": false
                     });
                   }
 
-                  productListArray.push({
-                    "type": "custom",
-                    "name": productData.properties.name,
-                    "description": productData.properties.description,
-                    "quantity": lineItemData.properties.quantity,
-                    "unitName": "Stück",
-                    "unitPrice": {
-                        "currency": "EUR",
-                        "netAmount": netAmount,
-                        "grossAmount": grossAmount,
-                        "taxRatePercentage": 19
+                  const offerData = {
+                    "voucherDate": voucherDate,
+                    "expirationDate": expirationDate, 
+                    "address": {
+                        "contactId": contactId
                     },
-                    "discountPercentage": 0,
-                    "lineItemAmount": grossAmount,
-                    "alternative": false,
-                    "optional": false
-                  });
-                }
-
-                const offerData = {
-                  "voucherDate": voucherDate,
-                  "expirationDate": expirationDate, 
-                  "address": {
-                      "contactId": contactId
-                  },
-                  "lineItems": productListArray,
-                  "totalPrice": totalPrice,
-                  "taxAmounts": taxAmounts,
-                  "taxConditions": {
-                      "taxType": "net"
-                  },
-                  "paymentConditions": {
-                      "paymentTermLabel": "Zahlbar sofort, rein netto",
-                      "paymentTermLabelTemplate": "Zahlbar sofort, rein netto",
-                      "paymentTermDuration": 3
-                  },
-                  "introduction": "Gerne bieten wir Ihnen an:",
-                  "title": "Angebot"
-                }
-
-                const createdOfferResult = await lexOfficeClient.createQuotation(offerData, { finalize: true });
-                
-                if (createdOfferResult.ok) {
-                  const createdOfferResultFile = await lexOfficeClient.renderQuotationDocumentFileId(createdOfferResult.val.id);
-                  if (createdOfferResultFile.ok) {
-                    const downloadFile = await lexOfficeClient.downloadFile(createdOfferResultFile.val.documentFileId);
-
-                    const browser = await playwright.firefox.launch({headless: true})
-                    const page = await browser.newPage();
-                    await page.goto('https://app.lexoffice.de/sign-in/authenticate?redirect=%2Fvouchers%23!%2Fview%2F'+createdOfferResult.val.id);
-                    await page.fill('#mui-1', await settings.getSettingData('lexofficelogin'));
-                    await page.fill('#mui-2', await settings.getSettingData('lexofficepassword'));
-                    await page.click("text=Alle akzeptieren");
-                    await page.click("text=ANMELDEN");
-                    await page.waitForLoadState('networkidle');
-                    var link = await page.locator('a:has-text("Link kopieren")').getAttribute('data-clipboard-text')
-                    await browser.close();
-
-                    const createdOfferData = await lexOfficeClient.retrieveQuotation(createdOfferResult.val.id);
-
-
-                    contactData.properties.offerLink = link;
-                    contactData.properties.offerNumber = createdOfferData.val.voucherNumber;
-
-
-                    var mailSubject = replacePlaceholder(await settings.getSettingData('offermailmailsubject'), contactData.properties);
-                    var mailBody = replacePlaceholder(await settings.getSettingData('offermailmailbody'), contactData.properties);
-
-
-                    // SEND MAIL
-                    await mailer.sendMail(await settings.getSettingData('mailersentmail'), contactData.properties.email, mailSubject, mailBody, mailBody,[{
-                        filename: 'angebot.pdf',
-                        content: downloadFile.val,
-                        encoding: 'base64'
-                    },{
-                        filename: 'AGB Automatenhandel24.pdf',
-                        path: './public/files/AGB Automatenhandel24.pdf'
-                    }]);
+                    "lineItems": productListArray,
+                    "totalPrice": totalPrice,
+                    "taxAmounts": taxAmounts,
+                    "taxConditions": {
+                        "taxType": "net"
+                    },
+                    "paymentConditions": {
+                        "paymentTermLabel": "Zahlbar sofort, rein netto",
+                        "paymentTermLabelTemplate": "Zahlbar sofort, rein netto",
+                        "paymentTermDuration": 3
+                    },
+                    "introduction": "Gerne bieten wir Ihnen an:",
+                    "title": "Angebot"
                   }
 
-                  var properties = {
-                    "offerid": createdOfferResult.val.id,
-                    "offercreateat": dayjs(createdOfferResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD')
-                  };
-                  var SimplePublicObjectInput = { properties };
-                  await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);                  
-                } else {
-                  errorlogging.saveError("error", "lexoffice", "Error create offer", "");
-                }
-              }else{
-                errorlogging.saveError("error", "lexoffice", "Error search contact", "");
-              }
+                  const createdOfferResult = await lexOfficeClient.createQuotation(offerData, { finalize: true });
+                  
+                  if (createdOfferResult.ok) {
+                    var result = await database.awaitQuery(`SELECT * FROM lexoffice_hubspot WHERE deal_id = ?`, [dealId]);
+    
+                    if(result.length != 0){
+                      await database.awaitQuery(`UPDATE lexoffice_hubspot SET document_id = ? WHERE deal_id = ?`, [createdOfferResult.val.id, dealId]);
+                    }else{
+                      await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id) VALUES (?, ?)`, [createdOfferResult.val.id, dealId]);
+                    }
 
-            } catch (err) {
-              errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
-              console.log(date+" - "+err);
+                    const createdOfferResultFile = await lexOfficeClient.renderQuotationDocumentFileId(createdOfferResult.val.id);
+                    if (createdOfferResultFile.ok) {
+                      const downloadFile = await lexOfficeClient.downloadFile(createdOfferResultFile.val.documentFileId);
+
+                      const browser = await playwright.firefox.launch({headless: true})
+                      const page = await browser.newPage();
+                      await page.goto('https://app.lexoffice.de/sign-in/authenticate?redirect=%2Fvouchers%23!%2Fview%2F'+createdOfferResult.val.id);
+                      await page.fill('#mui-1', await settings.getSettingData('lexofficelogin'));
+                      await page.fill('#mui-2', await settings.getSettingData('lexofficepassword'));
+                      await page.click("text=Alle akzeptieren");
+                      await page.click("text=ANMELDEN");
+                      await page.waitForLoadState('networkidle');
+                      var link = await page.locator('a:has-text("Link kopieren")').getAttribute('data-clipboard-text')
+                      await browser.close();
+
+                      const createdOfferData = await lexOfficeClient.retrieveQuotation(createdOfferResult.val.id);
+
+
+                      contactData.properties.offerLink = link;
+                      contactData.properties.offerNumber = createdOfferData.val.voucherNumber;
+
+
+                      var mailSubject = replacePlaceholder(await settings.getSettingData('offermailmailsubject'), contactData.properties);
+                      var mailBody = replacePlaceholder(await settings.getSettingData('offermailmailbody'), contactData.properties);
+
+
+                      // SEND MAIL
+                      await mailer.sendMail(await settings.getSettingData('mailersentmail'), contactData.properties.email, mailSubject, mailBody, mailBody,[{
+                          filename: 'angebot.pdf',
+                          content: downloadFile.val,
+                          encoding: 'base64'
+                      },{
+                          filename: 'AGB Automatenhandel24.pdf',
+                          path: './public/files/AGB Automatenhandel24.pdf'
+                      }]);
+                    }
+
+                    var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"quotation", documentId:createdOfferResult.val.id});
+
+                    var properties = {
+                      "offerid": createdOfferResult.val.id,
+                      "offercreateat": dayjs(createdOfferResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                      "angebots_url": documentUrl
+                    };
+                    var SimplePublicObjectInput = { properties };
+                    await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);                  
+                  } else {
+                    errorlogging.saveError("error", "lexoffice", "Error create offer", "");
+                  }
+                }else{
+                  errorlogging.saveError("error", "lexoffice", "Error search contact", "");
+                }
+
+              } catch (err) {
+                errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
+                console.log(date+" - "+err);
+              }
             }
           } catch (err) {
             errorlogging.saveError("error", "hubspot", "Error to load the Deal Data ("+dealId+")", "");
@@ -656,253 +673,270 @@ app.post('/hubspotwebhook', async (req, res) => {
           var dealId = body.objectId;
 
           // Lead Deal Data
-          var properties = ["zahlungs_art"];
+          var properties = ["zahlungs_art", "invoiceid"];
           var associations = ["contact", "product", "line_items"];
 
           try {
             const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
             var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties, undefined, associations, false, undefined);
 
-            // Load Contact Data
-            var contactId = dealData.associations.contacts.results[0].id;
+            var result = await database.awaitQuery(`SELECT * FROM lexoffice_hubspot WHERE deal_id = ? AND document_id = ? AND over_lexoffice = 1`, [dealId, dealData.properties.invoiceid]);
+  
+            if(result.length != 0){
+              await database.awaitQuery(`UPDATE lexoffice_hubspot SET over_lexoffice = 0 WHERE deal_id = ? AND document_id = ?`, [dealId, dealData.properties.invoiceid]);
+            }else{
+              // Load Contact Data
+              var contactId = dealData.associations.contacts.results[0].id;
 
-            var properties = ["email", "firstname", "lastname", "company", "address", "zip", "city", "salutation"];
-            
-            try {
-              var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
+              var properties = ["email", "firstname", "lastname", "company", "address", "zip", "city", "salutation"];
+              
+              try {
+                var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
 
-              // Check Contact LexOffice
-              const contactResult = await lexOfficeClient.filterContact({"email": contactData.properties.email});
+                // Check Contact LexOffice
+                const contactResult = await lexOfficeClient.filterContact({"email": contactData.properties.email});
 
-              if(contactResult.ok){
-                var contactId = '';
-                if(contactResult.val.numberOfElements != 0){
-                  contactId = contactResult.val.content[0].id;
-                }else{
-                  // Create LexOffice Contact
-                  var contactObject = {
-                    "version": 0,
-                    "roles": {
-                      "customer": {
+                if(contactResult.ok){
+                  var contactId = '';
+                  if(contactResult.val.numberOfElements != 0){
+                    contactId = contactResult.val.content[0].id;
+                  }else{
+                    // Create LexOffice Contact
+                    var contactObject = {
+                      "version": 0,
+                      "roles": {
+                        "customer": {
+                        }
+                      }
+                    };
+
+
+                    if(contactData.properties.company != null){
+                      contactObject.company = {
+                        "emailAddress": contactData.properties.email,
+                        "name": contactData.properties.company,
+                        "contactPersons": [
+                            {
+                              "salutation": contactData.properties.salutation,
+                              "firstName": contactData.properties.firstname,
+                              "lastName": contactData.properties.lastname,
+                              "primary": true,
+                              "emailAddress": contactData.properties.email
+                            }
+                        ]
+                      }
+                    }else{
+                      contactObject.person = {
+                        "salutation": contactData.properties.salutation,
+                        "firstName": contactData.properties.firstname,
+                        "lastName": contactData.properties.lastname
                       }
                     }
-                  };
 
-
-                  if(contactData.properties.company != null){
-                    contactObject.company = {
-                      "emailAddress": contactData.properties.email,
-                      "name": contactData.properties.company,
-                      "contactPersons": [
+                    
+                    contactObject.addresses = {
+                      "billing": [
                           {
-                            "salutation": contactData.properties.salutation,
-                            "firstName": contactData.properties.firstname,
-                            "lastName": contactData.properties.lastname,
-                            "primary": true,
-                            "emailAddress": contactData.properties.email
+                              "street": contactData.properties.address,
+                              "zip": contactData.properties.zip,
+                              "city": contactData.properties.city,
+                              "countryCode": "DE"
                           }
                       ]
-                    }
-                  }else{
-                    contactObject.person = {
-                      "salutation": contactData.properties.salutation,
-                      "firstName": contactData.properties.firstname,
-                      "lastName": contactData.properties.lastname
-                    }
+                    };
+
+                    contactObject.emailAddresses =  {
+                      "business": [
+                        contactData.properties.email
+                      ]
+                    };
+                                    
+                    const contactResult = await lexOfficeClient.createContact(contactObject);
+                    contactId = contactResult.val.id;
                   }
 
-                  
-                  contactObject.addresses = {
-                    "billing": [
-                        {
-                            "street": contactData.properties.address,
-                            "zip": contactData.properties.zip,
-                            "city": contactData.properties.city,
-                            "countryCode": "DE"
-                        }
-                    ]
+                  // Create Invoice
+                  dayjs.extend(utc)
+                  dayjs.extend(timezone)
+
+
+                  var voucherDate = dayjs().tz("Europe/Berlin");
+
+                  // Item List
+                  var productList = dealData.associations['line items'].results;
+
+                  var productListArray = [];
+
+                  var totalPrice = {
+                      "currency": "EUR",
+                      "totalNetAmount": 0,
+                      "totalGrossAmount": 0,
+                      "totalTaxAmount": 0
                   };
 
-                  contactObject.emailAddresses =  {
-                    "business": [
-                      contactData.properties.email
-                    ]
-                  };
-                                   
-                  const contactResult = await lexOfficeClient.createContact(contactObject);
-                  contactId = contactResult.val.id;
-                }
+                  var taxAmounts = [];
 
-                // Create Invoice
-                dayjs.extend(utc)
-                dayjs.extend(timezone)
+                  for(var i=0; i<productList.length; i++){
+                    var lineItemData = await hubspotClient.crm.lineItems.basicApi.getById(productList[i].id );
 
+                    var properties = ["name", "description", "price", "steuer_satz"];
+                    var productData = await hubspotClient.crm.products.basicApi.getById(lineItemData.properties.hs_product_id, properties );
 
-                var voucherDate = dayjs().tz("Europe/Berlin");
+                    var taxRate = productData.properties.steuer_satz;
+                    taxRate = parseFloat(taxRate.replace(" %", ""));
 
-                // Item List
-                var productList = dealData.associations['line items'].results;
+                    netAmount = parseFloat(productData.properties.price);
+                    taxAmount = (netAmount/100*taxRate);
+                    grossAmount = taxAmount+netAmount;
 
-                var productListArray = [];
+                    totalPrice.totalNetAmount = totalPrice.totalNetAmount+netAmount;
+                    totalPrice.totalGrossAmount = totalPrice.totalGrossAmount+grossAmount;
+                    totalPrice.totalTaxAmount = totalPrice.totalTaxAmount+taxAmount;
 
-                var totalPrice = {
-                    "currency": "EUR",
-                    "totalNetAmount": 0,
-                    "totalGrossAmount": 0,
-                    "totalTaxAmount": 0
-                };
-
-                var taxAmounts = [];
-
-                for(var i=0; i<productList.length; i++){
-                  var lineItemData = await hubspotClient.crm.lineItems.basicApi.getById(productList[i].id );
-
-                  var properties = ["name", "description", "price", "steuer_satz"];
-                  var productData = await hubspotClient.crm.products.basicApi.getById(lineItemData.properties.hs_product_id, properties );
-
-                  var taxRate = productData.properties.steuer_satz;
-                  taxRate = parseFloat(taxRate.replace(" %", ""));
-
-                  netAmount = parseFloat(productData.properties.price);
-                  taxAmount = (netAmount/100*taxRate);
-                  grossAmount = taxAmount+netAmount;
-
-                  totalPrice.totalNetAmount = totalPrice.totalNetAmount+netAmount;
-                  totalPrice.totalGrossAmount = totalPrice.totalGrossAmount+grossAmount;
-                  totalPrice.totalTaxAmount = totalPrice.totalTaxAmount+taxAmount;
-
-                  var foundTaxes = -1;
-                  for(var a=0; a<taxAmounts.length; a++){
-                    if(taxAmounts[a].taxRatePercentage == taxRate){
-                      foundTaxes = a;
+                    var foundTaxes = -1;
+                    for(var a=0; a<taxAmounts.length; a++){
+                      if(taxAmounts[a].taxRatePercentage == taxRate){
+                        foundTaxes = a;
+                      }
                     }
-                  }
 
-                  if(foundTaxes >= 0){
-                    taxAmounts[foundTaxes].taxAmount = parseFloat(taxAmounts[foundTaxes].taxAmount)+parseFloat(taxAmount);
-                    taxAmounts[foundTaxes].netAmount = parseFloat(taxAmounts[foundTaxes].netAmount)+parseFloat(netAmount);
-                  }else{
-                    taxAmounts.push({
-                        "taxRatePercentage": taxRate,
-                        "taxAmount": taxAmount,
-                        "netAmount": netAmount
+                    if(foundTaxes >= 0){
+                      taxAmounts[foundTaxes].taxAmount = parseFloat(taxAmounts[foundTaxes].taxAmount)+parseFloat(taxAmount);
+                      taxAmounts[foundTaxes].netAmount = parseFloat(taxAmounts[foundTaxes].netAmount)+parseFloat(netAmount);
+                    }else{
+                      taxAmounts.push({
+                          "taxRatePercentage": taxRate,
+                          "taxAmount": taxAmount,
+                          "netAmount": netAmount
+                      });
+                    }
+
+                    productListArray.push({
+                      "type": "custom",
+                      "name": productData.properties.name,
+                      "description": productData.properties.description,
+                      "quantity": lineItemData.properties.quantity,
+                      "unitName": "Stück",
+                      "unitPrice": {
+                          "currency": "EUR",
+                          "netAmount": netAmount,
+                          "grossAmount": grossAmount,
+                          "taxRatePercentage": 19
+                      },
+                      "discountPercentage": 0,
+                      "lineItemAmount": grossAmount,
+                      "alternative": false,
+                      "optional": false
                     });
                   }
 
-                  productListArray.push({
-                    "type": "custom",
-                    "name": productData.properties.name,
-                    "description": productData.properties.description,
-                    "quantity": lineItemData.properties.quantity,
-                    "unitName": "Stück",
-                    "unitPrice": {
-                        "currency": "EUR",
-                        "netAmount": netAmount,
-                        "grossAmount": grossAmount,
-                        "taxRatePercentage": 19
+                  const invoiceData = {
+                    voucherDate: voucherDate,
+                    "address": {
+                      "contactId": contactId
                     },
-                    "discountPercentage": 0,
-                    "lineItemAmount": grossAmount,
-                    "alternative": false,
-                    "optional": false
-                  });
-                }
-
-                const invoiceData = {
-                  voucherDate: voucherDate,
-                  "address": {
-                    "contactId": contactId
-                  },
-                  "lineItems": productListArray,
-                  "totalPrice": totalPrice,
-                  "taxConditions": {
-                    "taxType": "net"
-                  },
-                  "paymentConditions": {
-                    "paymentTermLabel": "Zahlbar sofort, rein netto",
-                    "paymentTermDuration": 0
-                  },
-                  "shippingConditions": {
-                    "shippingType": "none"
-                  },
-                  title: 'Rechnung',
-                  introduction: 'Unsere Lieferungen/Leistungen stellen wir Ihnen wie folgt in Rechnung',
-                  remark: 'Wir freuen uns auf eine Zusammenarbeit',
-                }
-
-                if(dealData.properties.zahlungs_art == "Finanzierung"){
-                  invoiceData.paymentConditions.paymentTermLabel = "Finanzierung";
-                }
-
-                const createdInvoiceResult = await lexOfficeClient.createInvoice(invoiceData, { finalize: true});
-
-                if (createdInvoiceResult.ok) {
-                  const createdInvoiceResultFile = await lexOfficeClient.renderInvoiceDocumentFileId(createdInvoiceResult.val.id);
-                  if (createdInvoiceResultFile.ok) {
-                    const downloadFile = await lexOfficeClient.downloadFile(createdInvoiceResultFile.val.documentFileId);
-
-                    const browser = await playwright.firefox.launch({headless: true})
-                    const page = await browser.newPage();
-                    await page.goto('https://app.lexoffice.de/sign-in/authenticate?redirect=%2Fvouchers%23!%2Fview%2F'+createdInvoiceResult.val.id);
-                    await page.fill('#mui-1', await settings.getSettingData('lexofficelogin'));
-                    await page.fill('#mui-2', await settings.getSettingData('lexofficepassword'));
-                    await page.click("text=Alle akzeptieren");
-                    await page.click("text=ANMELDEN");
-                    await page.waitForLoadState('networkidle');
-                    var link = await page.locator('a:has-text("Link kopieren")').getAttribute('data-clipboard-text')
-                    await browser.close();
-
-                    const createdInvoiceData = await lexOfficeClient.retrieveInvoice(createdInvoiceResult.val.id);
-
-
-                    contactData.properties.invoiceLink = link;
-                    contactData.properties.invoiceNumber = createdInvoiceData.val.voucherNumber;
-
-
-                    var mailSubject = replacePlaceholder(await settings.getSettingData('invoicemailmailsubject'), contactData.properties);
-                    var mailBody = replacePlaceholder(await settings.getSettingData('invoicemailmailbody'), contactData.properties);
-        
-                    // SEND MAIL
-                    await mailer.sendMail(await settings.getSettingData('mailersentmail'), contactData.properties.email, mailSubject, mailBody, mailBody,[{
-                        filename: 'rechnung.pdf',
-                        content: downloadFile.val,
-                        encoding: 'base64'
-                    },{
-                      filename: 'AGB Automatenhandel24.pdf',
-                      path: './public/files/AGB Automatenhandel24.pdf'
-                    }]);
+                    "lineItems": productListArray,
+                    "totalPrice": totalPrice,
+                    "taxConditions": {
+                      "taxType": "net"
+                    },
+                    "paymentConditions": {
+                      "paymentTermLabel": "Zahlbar sofort, rein netto",
+                      "paymentTermDuration": 0
+                    },
+                    "shippingConditions": {
+                      "shippingType": "none"
+                    },
+                    title: 'Rechnung',
+                    introduction: 'Unsere Lieferungen/Leistungen stellen wir Ihnen wie folgt in Rechnung',
+                    remark: 'Wir freuen uns auf eine Zusammenarbeit',
                   }
 
-                  var properties = {
-                    "invoiceid": createdInvoiceResult.val.id,
-                    "invoicecreateat": dayjs(createdInvoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD')
-                  };
-                  var SimplePublicObjectInput = { properties };
-                  await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);      
-                  
-                  
-                  // Paid if finance
                   if(dealData.properties.zahlungs_art == "Finanzierung"){
-                    var properties = {
-                      "invoiceagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
-                      "invoicedisagree": "",
-                      "dealstage": "363483639"
-                    };
-          
-                    var SimplePublicObjectInput = { properties };
-                    await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
+                    invoiceData.paymentConditions.paymentTermLabel = "Finanzierung";
                   }
-                } else {
-                  errorlogging.saveError("error", "lexoffice", "Error create invoice", "");
+
+                  const createdInvoiceResult = await lexOfficeClient.createInvoice(invoiceData, { finalize: true});
+
+                  if (createdInvoiceResult.ok) {
+                    var result = await database.awaitQuery(`SELECT * FROM lexoffice_hubspot WHERE deal_id = ?`, [dealId]);
+    
+                    if(result.length != 0){
+                      await database.awaitQuery(`UPDATE lexoffice_hubspot SET document_id = ? WHERE deal_id = ?`, [createdInvoiceResult.val.id, dealId]);
+                    }else{
+                      await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id) VALUES (?, ?)`, [createdInvoiceResult.val.id, dealId]);
+                    }
+
+                    const createdInvoiceResultFile = await lexOfficeClient.renderInvoiceDocumentFileId(createdInvoiceResult.val.id);
+                    if (createdInvoiceResultFile.ok) {
+                      const downloadFile = await lexOfficeClient.downloadFile(createdInvoiceResultFile.val.documentFileId);
+
+                      const browser = await playwright.firefox.launch({headless: true})
+                      const page = await browser.newPage();
+                      await page.goto('https://app.lexoffice.de/sign-in/authenticate?redirect=%2Fvouchers%23!%2Fview%2F'+createdInvoiceResult.val.id);
+                      await page.fill('#mui-1', await settings.getSettingData('lexofficelogin'));
+                      await page.fill('#mui-2', await settings.getSettingData('lexofficepassword'));
+                      await page.click("text=Alle akzeptieren");
+                      await page.click("text=ANMELDEN");
+                      await page.waitForLoadState('networkidle');
+                      var link = await page.locator('a:has-text("Link kopieren")').getAttribute('data-clipboard-text')
+                      await browser.close();
+
+                      const createdInvoiceData = await lexOfficeClient.retrieveInvoice(createdInvoiceResult.val.id);
+
+
+                      contactData.properties.invoiceLink = link;
+                      contactData.properties.invoiceNumber = createdInvoiceData.val.voucherNumber;
+
+
+                      var mailSubject = replacePlaceholder(await settings.getSettingData('invoicemailmailsubject'), contactData.properties);
+                      var mailBody = replacePlaceholder(await settings.getSettingData('invoicemailmailbody'), contactData.properties);
+          
+                      // SEND MAIL
+                      await mailer.sendMail(await settings.getSettingData('mailersentmail'), contactData.properties.email, mailSubject, mailBody, mailBody,[{
+                          filename: 'rechnung.pdf',
+                          content: downloadFile.val,
+                          encoding: 'base64'
+                      },{
+                        filename: 'AGB Automatenhandel24.pdf',
+                        path: './public/files/AGB Automatenhandel24.pdf'
+                      }]);
+                    }
+
+                    var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"invoice", documentId:createdInvoiceResult.val.id});
+
+                    var properties = {
+                      "invoiceid": createdInvoiceResult.val.id,
+                      "invoicecreateat": dayjs(createdInvoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                      "rechnungs_url": documentUrl
+                    };
+                    var SimplePublicObjectInput = { properties };
+                    await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);      
+                    
+                    
+                    // Paid if finance
+                    if(dealData.properties.zahlungs_art == "Finanzierung"){
+                      var properties = {
+                        "invoiceagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
+                        "invoicedisagree": "",
+                        "dealstage": "363483639"
+                      };
+            
+                      var SimplePublicObjectInput = { properties };
+                      await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
+                    }
+                  } else {
+                    errorlogging.saveError("error", "lexoffice", "Error create invoice", "");
+                  }
+
+                }else{
+                  errorlogging.saveError("error", "lexoffice", "Error search contact", "");
                 }
 
-              }else{
-                errorlogging.saveError("error", "lexoffice", "Error search contact", "");
+              } catch (err) {
+                errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
+                console.log(date+" - "+err);
               }
-
-            } catch (err) {
-              errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
-              console.log(date+" - "+err);
             }
           } catch (err) {
             errorlogging.saveError("error", "hubspot", "Error to load the Deal Data ("+dealId+")", "");
@@ -912,7 +946,6 @@ app.post('/hubspotwebhook', async (req, res) => {
 
 
         }
-
 
         // Finance agree
         if (body.subscriptionType == "deal.propertyChange" && body.propertyName == "financeagree") {
@@ -929,7 +962,7 @@ app.post('/hubspotwebhook', async (req, res) => {
               
               if(dealData.properties.invoiceid == null){
                 var properties = {
-                  "dealstage": "363483638"
+                  "dealstage": "363483639"
                 };
                 var SimplePublicObjectInput = { properties };
                 await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
@@ -1082,6 +1115,125 @@ app.post('/hubspotwebhook', async (req, res) => {
             }
           }
         }
+
+        // Create Order Confirmation
+        if (body.subscriptionType == "deal.propertyChange" && body.propertyName == "dealstage" && body.propertyValue == "closedwon") {
+          var dealId = body.objectId;
+          const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
+
+          // Lead Deal Data
+          var properties = ["auftragsbestatigungs_id", "offerid", "offerid", "orderdelivered"];
+          var associations = ["contact", "product", "line_items"];
+
+          
+          var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties, undefined, associations, false, undefined);
+
+          var result = await database.awaitQuery(`SELECT * FROM lexoffice_hubspot WHERE deal_id = ? AND document_id = ? AND over_lexoffice = 1`, [dealId, dealData.properties.auftragsbestatigungs_id]);
+
+          if(result.length != 0){
+            await database.awaitQuery(`UPDATE lexoffice_hubspot SET over_lexoffice = 0 WHERE deal_id = ? AND document_id = ?`, [dealId, dealData.properties.auftragsbestatigungs_id]);
+          }else{
+            // Load Contact Data
+            var contactId = dealData.associations.contacts.results[0].id;
+
+            var properties = ["email", "firstname", "lastname", "company", "address", "zip", "city", "salutation"];
+              
+            try {
+              var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
+
+              if(dealData.properties.auftragsbestatigungs_id == "" || dealData.properties.auftragsbestatigungs_id == null){
+                if(dealData.properties.offerid != "" && dealData.properties.offerid != null){
+                  const offerData = await lexOfficeClient.retrieveQuotation(dealData.properties.offerid);
+
+                  if(offerData.ok){
+                    dayjs.extend(utc)
+                    dayjs.extend(timezone)
+                    var voucherDate = dayjs().tz("Europe/Berlin");
+                    var shippingDate = dayjs(dealData.properties.orderdelivered).tz("Europe/Berlin").format('YYYY-MM-DD')+"T16:00:00.000+02:00";
+                    
+                    const orderConfirmationData = {
+                      "voucherDate": voucherDate,
+                      "address": offerData.val.address,
+                      "lineItems": offerData.val.lineItems,
+                      "totalPrice": offerData.val.totalPrice,
+                      "taxConditions": offerData.val.taxConditions,
+                      "shippingConditions": {
+                        "shippingDate": shippingDate,
+                        "shippingType": "delivery"
+                      },
+                      "paymentConditions": offerData.val.paymentConditions,
+                      "title": "Auftragsbestätigung",
+                      "introduction": "Gerne bestätigen wir Ihren Auftrag.",
+                      "remark": "Wir freuen uns auf eine gute Zusammenarbeit.",
+                      "deliveryTerms": "Lieferung an die angegebene Lieferadresse."
+                    };
+
+                    const createdOrderConfirmationResult = await lexOfficeClient.createOrderConfirmation(orderConfirmationData);
+
+                    if(createdOrderConfirmationResult.ok){
+                      var result = await database.awaitQuery(`SELECT * FROM lexoffice_hubspot WHERE deal_id = ?`, [dealId]);
+      
+                      if(result.length != 0){
+                        await database.awaitQuery(`UPDATE lexoffice_hubspot SET document_id = ? WHERE deal_id = ?`, [createdOrderConfirmationResult.val.id, dealId]);
+                      }else{
+                        await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id) VALUES (?, ?)`, [createdOrderConfirmationResult.val.id, dealId]);
+                      }
+
+                      const createdOrderConfirmationResultFile = await lexOfficeClient.renderOrderConfirmationDocumentFileId(createdOrderConfirmationResult.val.id);
+
+                      if (createdOrderConfirmationResultFile.ok) {
+                        const downloadFile = await lexOfficeClient.downloadFile(createdOrderConfirmationResultFile.val.documentFileId);
+
+                        const browser = await playwright.firefox.launch({headless: true})
+                        const page = await browser.newPage();
+                        await page.goto('https://app.lexoffice.de/sign-in/authenticate?redirect=%2Fvouchers%23!%2Fview%2F'+createdOrderConfirmationResult.val.id);
+                        await page.fill('#mui-1', await settings.getSettingData('lexofficelogin'));
+                        await page.fill('#mui-2', await settings.getSettingData('lexofficepassword'));
+                        await page.click("text=Alle akzeptieren");
+                        await page.click("text=ANMELDEN");
+                        await page.waitForLoadState('networkidle');
+                        var link = await page.locator('a:has-text("Link kopieren")').getAttribute('data-clipboard-text')
+                        await browser.close();
+
+                        const createdOrderConfirmationData = await lexOfficeClient.retrieveOrderConfirmation(createdOrderConfirmationResult.val.id);
+
+                        contactData.properties.orderConfirmationLink = link;
+                        contactData.properties.orderConfirmationNumber = createdOrderConfirmationData.val.voucherNumber;
+
+                        var mailSubject = replacePlaceholder(await settings.getSettingData('orderconfirmationmailsubject'), contactData.properties);
+                        var mailBody = replacePlaceholder(await settings.getSettingData('orderconfirmationmailbody'), contactData.properties);
+
+                        // SEND MAIL
+                        await mailer.sendMail(await settings.getSettingData('mailersentmail'), contactData.properties.email, mailSubject, mailBody, mailBody,[{
+                            filename: 'auftragsbestätigung.pdf',
+                            content: downloadFile.val,
+                            encoding: 'base64'
+                        },{
+                            filename: 'AGB Automatenhandel24.pdf',
+                            path: './public/files/AGB Automatenhandel24.pdf'
+                        }]);
+                      }
+
+                      var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"orderconfirmation", documentId:createdOrderConfirmationResult.val.id});
+
+                      var properties = {
+                        "auftragsbestatigungs_id": createdOrderConfirmationResult.val.id,
+                        "auftragsbestatigungs_datum": dayjs(createdOrderConfirmationResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                        "auftragsbestatigungs_url": documentUrl
+                      };
+                      var SimplePublicObjectInput = { properties };
+                      await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);   
+                    }
+                  }
+                }
+              }
+            }catch(err){
+              errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
+              console.log(date+" - "+err);
+            }
+          }
+
+        }
       }
     }else{
       //errorlogging.saveError("error", "hubspot", "Error to with HMAC Key", "");
@@ -1151,7 +1303,7 @@ app.post('/lexofficewebhook', async (req, res) => {
                 if(dealData.properties.dealstage != "363483638" && dealData.properties.dealstage != "363483637"){
                   var properties = {};
 
-                  if(properties.offeragree == ""){
+                  if(dealData.properties.offeragree == "" || dealData.properties.offeragree == null){
                     properties.offeragree = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD');
                   }
 
@@ -1159,6 +1311,27 @@ app.post('/lexofficewebhook', async (req, res) => {
                     properties.dealstage = "363483638";
                   }else{
                     properties.dealstage = "363483637";
+                    
+                    // Send CC Mail
+                    const createdOfferResultFile = await lexOfficeClient.renderQuotationDocumentFileId(offerResult.val.id);
+                    if (createdOfferResultFile.ok) {
+                      const downloadFile = await lexOfficeClient.downloadFile(createdOfferResultFile.val.documentFileId);
+
+                      var mailData = {
+                        "offerNumber":offerResult.val.voucherNumber
+                      }
+  
+                      var mailSubject = replacePlaceholder(await settings.getSettingData('offerccmailsubject'), mailData);
+                      var mailBody = replacePlaceholder(await settings.getSettingData('offerccmailbody'), mailData);
+
+                      // SEND MAIL
+                      await mailer.sendMail(await settings.getSettingData('mailersentmail'), await settings.getSettingData('lexofficeoffercc'), mailSubject, mailBody, mailBody,[{
+                          filename: 'angebot.pdf',
+                          content: downloadFile.val,
+                          encoding: 'base64'
+                      }]);
+                    }
+
                   }
         
                   var SimplePublicObjectInput = { properties };
@@ -1184,7 +1357,7 @@ app.post('/lexofficewebhook', async (req, res) => {
                 if(dealData.properties.dealstage != "closedlost"){
                   var properties = {};
 
-                  if(properties.offerdisagree == ""){
+                  if(dealData.properties.offerdisagree == "" || dealData.properties.offerdisagree == null){
                     properties.offerdisagree = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD');
                   }
 
@@ -1199,11 +1372,78 @@ app.post('/lexofficewebhook', async (req, res) => {
             } catch (err) {
               console.log(date+" - "+err);
             }  
+          }else if(offerResult.val.voucherStatus == "open"){ 
+            var result = await database.awaitQuery(`SELECT * FROM lexoffice_hubspot WHERE document_id = ?`, [body.resourceId]);
+            
+            if(result.length == 0){
+              // Check Contact LexOffice
+              const contactResult = await lexOfficeClient.retrieveContact(offerResult.val.address.contactId);
+
+              if(contactResult.ok){
+                if(contactResult.val.emailAddresses.business){
+                  var email = contactResult.val.emailAddresses.business[0];
+
+                  var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": email, "propertyName":"email","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+
+                  try {
+                    var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
+            
+                    if(apiResponse.total != 0){
+                      var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"quotation", documentId:offerResult.val.id});
+
+                      var properties = {
+                        "offerid": offerResult.val.id,
+                        "offercreateat": dayjs(offerResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                        "angebots_url": documentUrl,
+                        "pipeline": "default",
+                        "dealstage": "363483635",
+                        "closedate": dayjs(offerResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                        "amount": "0",
+                        "dealname": "Angebot "+offerResult.val.voucherNumber
+                      };
+
+                      var amount = 0;
+                      var lineItems = offerResult.val.lineItems;
+
+                      for(var i=0; i<lineItems.length; i++){
+                        amount = amount+(lineItems[i].unitPrice.netAmount*lineItems[i].quantity);
+                      }
+
+                      properties.amount = amount;
+                      var SimplePublicObjectInput = { properties };
+                      var createDeal = await hubspotClient.crm.deals.basicApi.create(SimplePublicObjectInput);  
+                      await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [offerResult.val.id, createDeal.id]);
+
+                      // Add Products
+                      for(var i=0; i<lineItems.length; i++){
+                        var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": lineItems[i].id, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                        var productApiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest); 
+
+                        if(productApiResponse.total != 0){
+                          var properties = {
+                            "price": lineItems[i].unitPrice.netAmount,
+                            "quantity": lineItems[i].quantity,
+                            "name": productApiResponse.results[0].properties.name,
+                            "hs_product_id": productApiResponse.results[0].id
+                          };
+                          var SimplePublicObjectInput = { properties };
+                          var createLineItem = await hubspotClient.crm.lineItems.basicApi.create(SimplePublicObjectInput);
+                          var updateAssociations = await hubspotClient.crm.lineItems.associationsApi.create(createLineItem.id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 20}]);
+                        }
+                      }
+                      var updateAssociations = await hubspotClient.crm.contacts.associationsApi.create(apiResponse.results[0].id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 4}]);         
+                    }
+                  }catch (err){
+                    console.log(err);
+                  }
+                }
+              }  
+            }
           }
         }
       }
 
-      // Check Offer Status
+      // Check Invoice Status
       if(body.eventType == "invoice.status.changed"){
         const invoiceResult = await lexOfficeClient.retrieveInvoice(body.resourceId);
 
@@ -1223,7 +1463,7 @@ app.post('/lexofficewebhook', async (req, res) => {
                 if(dealData.properties.dealstage != "363483639"){
                   var properties = {};
 
-                  if(properties.invoiceagree == ""){
+                  if(dealData.properties.invoiceagree == "" || dealData.properties.invoiceagree == null){
                     properties.invoiceagree = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD');
                   }
                   
@@ -1251,7 +1491,7 @@ app.post('/lexofficewebhook', async (req, res) => {
                 if(dealData.properties.dealstage != "closedlost"){
                   var properties = {};
 
-                  if(properties.invoicedisagree == ""){
+                  if(dealData.properties.invoicedisagree == "" || dealData.properties.invoicedisagree == null){
                     properties.invoicedisagree = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD');
                   }
                   
@@ -1264,11 +1504,277 @@ app.post('/lexofficewebhook', async (req, res) => {
             } catch (err) {
               console.log(date+" - "+err);
             }  
+          }else if(invoiceResult.val.voucherStatus == "open"){ 
+            var result = await database.awaitQuery(`SELECT * FROM lexoffice_hubspot WHERE document_id = ?`, [body.resourceId]);
+            
+            if(result.length == 0){
+              // Check Contact LexOffice
+              const contactResult = await lexOfficeClient.retrieveContact(invoiceResult.val.address.contactId);
+
+              if(contactResult.ok){
+                var email = contactResult.val.emailAddresses.business[0];
+
+                var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": email, "propertyName":"email","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+
+                try {
+                  var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
+          
+                  if(apiResponse.total != 0){
+                    var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"invoice", documentId:invoiceResult.val.id});
+
+                    var foundOffer = false;
+                    var foundOfferId = false;
+                    if(invoiceResult.val.relatedVouchers.length != 0){
+                      for(var i=0; i<invoiceResult.val.relatedVouchers.length; i++){
+                        if(invoiceResult.val.relatedVouchers[i].voucherType == "quotation"){
+                          foundOffer = true;
+                          foundOfferId = invoiceResult.val.relatedVouchers[i].id;
+                        }
+                      }
+                    }
+
+                    if(foundOffer){
+                      var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundOfferId, "propertyName":"offerid","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                      var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);
+                      
+                      if(apiResponse.total != 0){
+                        var properties = {
+                          "invoiceid": invoiceResult.val.id,
+                          "invoicecreateat": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                          "rechnungs_url": documentUrl,
+                          "dealstage": "363483638"
+                        };
+
+                        var SimplePublicObjectInput = { properties };
+                        var createDeal = await hubspotClient.crm.deals.basicApi.update(apiResponse.results[0].id, SimplePublicObjectInput);  
+                        await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [invoiceResult.val.id, apiResponse.results[0].id]);
+                      }
+                    }else{
+                      var properties = {
+                        "invoiceid": invoiceResult.val.id,
+                        "invoicecreateat": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                        "rechnungs_url": documentUrl,
+                        "pipeline": "default",
+                        "dealstage": "363483638",
+                        "closedate": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                        "amount": "0",
+                        "dealname": "Rechnung "+invoiceResult.val.voucherNumber
+                      };
+
+                      var amount = 0;
+                      var lineItems = invoiceResult.val.lineItems;
+
+                      for(var i=0; i<lineItems.length; i++){
+                        amount = amount+(lineItems[i].unitPrice.netAmount*lineItems[i].quantity);
+                      }
+
+                      properties.amount = amount;
+                      var SimplePublicObjectInput = { properties };
+                      var createDeal = await hubspotClient.crm.deals.basicApi.create(SimplePublicObjectInput);  
+                      await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [invoiceResult.val.id, createDeal.id]);
+
+                      // Add Products
+                      for(var i=0; i<lineItems.length; i++){
+                        var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": lineItems[i].id, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                        var productApiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest); 
+
+                        if(productApiResponse.total != 0){
+                          var properties = {
+                            "price": lineItems[i].unitPrice.netAmount,
+                            "quantity": lineItems[i].quantity,
+                            "name": productApiResponse.results[0].properties.name,
+                            "hs_product_id": productApiResponse.results[0].id
+                          };
+                          var SimplePublicObjectInput = { properties };
+                          var createLineItem = await hubspotClient.crm.lineItems.basicApi.create(SimplePublicObjectInput);
+                          var updateAssociations = await hubspotClient.crm.lineItems.associationsApi.create(createLineItem.id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 20}]);
+                        }
+                      }
+                      var updateAssociations = await hubspotClient.crm.contacts.associationsApi.create(apiResponse.results[0].id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 4}]);         
+                    }
+                  }
+                }catch (err){
+                  console.log(err);
+                }
+              }  
+            }
           }
         }
       }
+
+      // Create Offer
+      if(body.eventType == "quotation.created"){
+
+      }
+
+      // Change Offer
+      if(body.eventType == "quotation.changed"){
+       
+      }
+
+      // Create Invoice
+      if(body.eventType == "invoice.created"){
+
+      }
+
+      // Change Invoice
+      if(body.eventType == "invoice.changed"){
+       
+      }
+
+      // Create Contact
+      if(body.eventType == "contact.created"){
+        const contactResult = await lexOfficeClient.retrieveContact(body.resourceId);
+
+        if(contactResult.ok){
+          if(contactResult.val.emailAddresses.business){
+            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": contactResult.val.emailAddresses.business[0], "propertyName":"email","operator":"EQ"}]}], properties:["email"], limit: 100, after: 0 };
+
+            try {
+              var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
+              
+              if(apiResponse.total == 0){
+                var properties = {
+                  "email": contactResult.val.emailAddresses.business[0]
+                };
+
+                if(contactResult.val.company){
+                  properties.company = contactResult.val.company.name;
+
+                  if(contactResult.val.company.contactPersons){
+                    properties.salutation = contactResult.val.company.contactPersons[0].salutation;
+                    properties.firstname = contactResult.val.company.contactPersons[0].firstName;
+                    properties.lastname = contactResult.val.company.contactPersons[0].lastName;
+                  }
+                }
+
+                if(contactResult.val.person){
+                  properties.salutation = contactResult.val.person.salutation;
+                  properties.firstname = contactResult.val.person.firstName;
+                  properties.lastname = contactResult.val.person.lastName;
+                }
+
+
+                if(contactResult.val.addresses.billing){
+                  properties.address = contactResult.val.addresses.billing[0].street;
+                  properties.zip = contactResult.val.addresses.billing[0].zip;
+                  properties.city = contactResult.val.addresses.billing[0].city;
+                  properties.country = "Deutschland";
+                }
+
+                if(contactResult.val.phoneNumbers.business){
+                  properties.phone = contactResult.val.phoneNumbers.business[0];
+                }
+
+                var SimplePublicObjectInput = { properties };
+                var createContact = await hubspotClient.crm.contacts.basicApi.create(SimplePublicObjectInput);  
+              }  
+            }catch(error){
+  
+            }
+          }
+        }
+
+
+
+        /*
+
+
+
+                     var properties = {
+                        "invoiceid": invoiceResult.val.id,
+                        "invoicecreateat": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                        "rechnungs_url": documentUrl,
+                        "pipeline": "default",
+                        "dealstage": "363483638",
+                        "closedate": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                        "amount": "0",
+                        "dealname": "Rechnung "+invoiceResult.val.voucherNumber
+                      };
+
+                      var amount = 0;
+                      var lineItems = invoiceResult.val.lineItems;
+
+                      for(var i=0; i<lineItems.length; i++){
+                        amount = amount+(lineItems[i].unitPrice.netAmount*lineItems[i].quantity);
+                      }
+
+                      properties.amount = amount;
+                      var SimplePublicObjectInput = { properties };
+                      var createDeal = await hubspotClient.crm.deals.basicApi.create(SimplePublicObjectInput);  
+
+
+
+
+
+
+
+// Check Contact LexOffice
+const contactResult = await lexOfficeClient.filterContact({"email": contactData.properties.email});
+
+if(contactResult.ok){
+  var contactId = '';
+  if(contactResult.val.numberOfElements != 0){
+    contactId = contactResult.val.content[0].id;
+  }else{
+    // Create LexOffice Contact
+
+
+    
+
+
+  
+                    
+    const contactResult = await lexOfficeClient.createContact(contactObject);
+    contactId = contactResult.val.id;
+  }
+  */
+
+
+
+
+
+
+      }
     }
   }
+
+  res.send(true);
+});
+
+/** 
+ * Route to load the pdf files
+ * 
+ */
+app.get('/showdocument', async (req, res) => {
+    // LexOffice Api Client
+    const lexOfficeClient = new lexoffice.Client(await settings.getSettingData('lexofficeapikey'));
+
+    if(req.query['documentId'] && req.query['type'] && req.query['token'] == "asndnasd9h3743287v324v78asd00and3"){
+      if(req.query['type'] == "quotation"){
+        var resultFile = await lexOfficeClient.renderQuotationDocumentFileId(req.query['documentId']);
+      }else if(req.query['type'] == "invoice"){
+        var resultFile = await lexOfficeClient.renderInvoiceDocumentFileId(req.query['documentId']);
+      }else if(req.query['type'] == "orderconfirmation"){
+        var resultFile = await lexOfficeClient.renderOrderConfirmationDocumentFileId(req.query['documentId']);
+      }else{
+        res.sendFile(__dirname+"/public/showdocument/index.html");
+      }
+
+      if (resultFile.ok) {
+        const downloadFile = await lexOfficeClient.downloadFile(resultFile.val.documentFileId);
+        if(downloadFile.ok){
+          res.setHeader('Content-Type', 'application/pdf');
+          res.end(downloadFile.val, 'base64')
+        }else{
+          res.sendFile(__dirname+"/public/showdocument/index.html");
+        }
+      }else{
+        res.sendFile(__dirname+"/public/showdocument/index.html");
+      }
+    }else{
+      res.sendFile(__dirname+"/public/showdocument/index.html");
+    }
 });
 
 /** 
@@ -1288,6 +1794,8 @@ cron.schedule('0 0 * * *', async function() {
 
     for(var i=0; i<=totalPages; i++){
       var contactsResult = await lexOfficeClient.filterContact({page:i, size:200});
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
       if(contactsResult.ok){
         var contactsResultData = contactsResult.val.content;
 
@@ -1296,7 +1804,8 @@ cron.schedule('0 0 * * *', async function() {
             var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": contactsResultData[a].emailAddresses.business[0], "propertyName":"email","operator":"EQ"}]}], properties:["email"], limit: 100, after: 0 };
 
             try {
-              var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);   
+              var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
+              await new Promise(resolve => setTimeout(resolve, 1000)); 
 
               if(!apiResponse.results[0]){
                 var properties = {
@@ -1323,26 +1832,27 @@ cron.schedule('0 0 * * *', async function() {
                   }
                 }
 
-                if(contactsResultData[a].addresses.billing){
-                  if(contactsResultData[a].addresses.billing[0].street){
-                    properties.address = contactsResultData[a].addresses.billing[0].street;
-                  }
+                if(contactsResultData[a].addresses){
+                  if(contactsResultData[a].addresses.billing){
+                    if(contactsResultData[a].addresses.billing[0].street){
+                      properties.address = contactsResultData[a].addresses.billing[0].street;
+                    }
 
-                  if(contactsResultData[a].addresses.billing[0].zip){
-                    properties.zip = contactsResultData[a].addresses.billing[0].zip;
-                  }
+                    if(contactsResultData[a].addresses.billing[0].zip){
+                      properties.zip = contactsResultData[a].addresses.billing[0].zip;
+                    }
 
-                  if(contactsResultData[a].addresses.billing[0].city){
-                    properties.city = contactsResultData[a].addresses.billing[0].city;
-                  }
+                    if(contactsResultData[a].addresses.billing[0].city){
+                      properties.city = contactsResultData[a].addresses.billing[0].city;
+                    }
 
-                  if(contactsResultData[a].addresses.billing[0].countryCode){
-                    if(contactsResultData[a].addresses.billing[0].countryCode == "DE"){
-                      properties.country = "Deutschland";
+                    if(contactsResultData[a].addresses.billing[0].countryCode){
+                      if(contactsResultData[a].addresses.billing[0].countryCode == "DE"){
+                        properties.country = "Deutschland";
+                      }
                     }
                   }
                 }
-
 
                 var SimplePublicObjectInput = { properties };
                 var apiResponse = await hubspotClient.crm.contacts.basicApi.create(SimplePublicObjectInput); 
@@ -1355,8 +1865,438 @@ cron.schedule('0 0 * * *', async function() {
       }
     }
   }
-  console.log("Import completed");
+  console.log("Contact Import completed");
 });
+
+/** 
+ * Import Products
+ * 
+ */
+cron.schedule('0 2 * * *', async function() {
+  const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
+
+  dayjs.extend(utc)
+  dayjs.extend(timezone)
+  var date = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD HH:mm:ss');
+
+  const browser = await playwright.firefox.launch({headless: true})
+  const page = await browser.newPage();
+  await page.goto('https://app.lexoffice.de/sign-in/authenticate');
+  await page.fill('#mui-1', await settings.getSettingData('lexofficelogin'));
+  await page.fill('#mui-2', await settings.getSettingData('lexofficepassword'));
+  await page.click("text=Alle akzeptieren");
+  await page.click("text=ANMELDEN");
+  await page.waitForLoadState('networkidle');
+
+  // Import Products
+  await page.goto('https://app.lexoffice.de/mat/list?rowsPerPage=3&orderBy=title&order=asc&page=100&archived=false&query=&type=PRODUCT');
+  await page.waitForLoadState('networkidle');
+
+  var morePage = true;
+  var currentPage = 1;
+
+  while(morePage){
+    var arrayOfLocators = await page.getByTestId('material-item-title');
+    var elementsCount = await arrayOfLocators.count();
+  
+    for (var index= 0; index < elementsCount ; index++) {
+      var element = await arrayOfLocators.nth(index);
+      await element.click();
+      await page.goto(await page.url());
+      await page.waitForLoadState('networkidle');
+
+      var foundProductId = await page.url();
+      foundProductId = foundProductId.split("/");
+      foundProductId = foundProductId[foundProductId.length-1];
+
+      var foundTax = await page.locator('//label[contains(text(),"Steuer")]/parent::div/div/div').innerText();
+      var currentTax = "19 %";
+
+      if(foundTax == "USt 19%"){
+        currentTax = "19 %";
+      }else if(foundTax == "USt 7%"){
+        currentTax = "7 %";
+      }else if(foundTax == "USt 0%"){
+        currentTax = "0 %";
+      }
+
+      var price = await page.getByLabel('Nettopreis').inputValue();
+      price = price.replace(".", "");
+      price = price.replace(",", ".");
+      price = parseFloat(price);
+
+      var properties = {
+        "name": await page.locator('input[name="title"]').inputValue(),
+        "description": await page.locator('textarea[name="description"]').inputValue(),
+        "hs_price_eur": price,
+        "hs_product_type": "inventory",
+        "steuer_satz": currentTax,
+        "lexoffice_product_id": foundProductId
+      };
+
+      
+      var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundProductId, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+
+      try {
+        var apiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest);  
+
+        if(apiResponse.total == 0){
+          var SimplePublicObjectInput = { properties };
+          var apiResponse = await hubspotClient.crm.products.basicApi.create(SimplePublicObjectInput); 
+        }
+      }catch (err){
+        errorlogging.saveError("error", "lexoffice", "Error import product ("+await page.locator('input[name="title"]').inputValue()+")", err);
+        console.log(date+" - "+err);
+      }
+      
+
+      await page.goBack();
+      await page.waitForLoadState('networkidle');
+            
+      if(currentPage > 1){
+        for(var a=1; a<currentPage; a++){
+          await page.getByTitle("Zur nächsten Seite").click();
+          await page.waitForLoadState('networkidle');
+        }
+      }
+      
+    }
+
+    if(await page.getByTitle("Zur nächsten Seite").isDisabled()){
+      morePage = false;
+    }else{
+      await page.getByTitle("Zur nächsten Seite").click();
+      await page.waitForLoadState('networkidle');
+      currentPage = new URL(await page.url()).searchParams.get("page");
+    }
+  }
+
+  // Import Services
+  await page.goto('https://app.lexoffice.de/mat/list?rowsPerPage=3&orderBy=title&order=asc&page=100&archived=false&query=&type=SERVICE');
+  await page.waitForLoadState('networkidle');
+
+  var morePage = true;
+  var currentPage = 1;
+
+  while(morePage){
+    var arrayOfLocators = await page.getByTestId('material-item-title');
+    var elementsCount = await arrayOfLocators.count();
+  
+    for (var index= 0; index < elementsCount ; index++) {
+      var element = await arrayOfLocators.nth(index);
+      await element.click();
+      await page.goto(await page.url());
+      await page.waitForLoadState('networkidle');
+
+      var foundProductId = await page.url();
+      foundProductId = foundProductId.split("/");
+      foundProductId = foundProductId[foundProductId.length-1];
+
+      var foundTax = await page.locator('//label[contains(text(),"Steuer")]/parent::div/div/div').innerText();
+      var currentTax = "19 %";
+
+      if(foundTax == "USt 19%"){
+        currentTax = "19 %";
+      }else if(foundTax == "USt 7%"){
+        currentTax = "7 %";
+      }else if(foundTax == "USt 0%"){
+        currentTax = "0 %";
+      }
+
+      var price = await page.getByLabel('Nettopreis').inputValue();
+      price = price.replace(".", "");
+      price = price.replace(",", ".");
+      price = parseFloat(price);
+
+      var properties = {
+        "name": await page.locator('input[name="title"]').inputValue(),
+        "description": await page.locator('textarea[name="description"]').inputValue(),
+        "hs_price_eur": price,
+        "hs_product_type": "service",
+        "steuer_satz": currentTax,
+        "lexoffice_product_id": foundProductId
+      };
+
+      
+      var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundProductId, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+
+      try {
+        var apiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest);  
+
+        if(apiResponse.total == 0){
+          var SimplePublicObjectInput = { properties };
+          var apiResponse = await hubspotClient.crm.products.basicApi.create(SimplePublicObjectInput); 
+        }
+      }catch (err){
+        errorlogging.saveError("error", "lexoffice", "Error import product ("+await page.locator('input[name="title"]').inputValue()+")", err);
+        console.log(date+" - "+err);
+      }
+      
+
+      await page.goBack();
+      await page.waitForLoadState('networkidle');
+            
+      if(currentPage > 1){
+        for(var a=1; a<currentPage; a++){
+          await page.getByTitle("Zur nächsten Seite").click();
+          await page.waitForLoadState('networkidle');
+        }
+      }
+      
+    }
+
+    if(await page.getByTitle("Zur nächsten Seite").isDisabled()){
+      morePage = false;
+    }else{
+      await page.getByTitle("Zur nächsten Seite").click();
+      await page.waitForLoadState('networkidle');
+      currentPage = new URL(await page.url()).searchParams.get("page");
+    }
+  }
+
+  await browser.close();
+  console.log("Product Import Completed");
+});
+
+/** 
+ * Import Invoice and Offers
+ * 
+ */
+//cron.schedule('0 2 * * *', async function() {
+async function test(){
+  dayjs.extend(utc)
+  dayjs.extend(timezone)
+  var date = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD HH:mm:ss');
+
+  const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
+
+  const lexOfficeClient = new lexoffice.Client(await settings.getSettingData('lexofficeapikey'));
+
+  //Offer
+  var voucherResult = await lexOfficeClient.retrieveVoucherlist({"voucherType":"quotation", "voucherStatus":"open,accepted,rejected,paid,voided", size:200, page:1});
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  if(voucherResult.ok){
+    var totalPages = voucherResult.val.totalPages;
+
+    for(var i=0; i<=totalPages; i++){
+      var voucherResult = await lexOfficeClient.retrieveVoucherlist({"voucherType":"quotation", "voucherStatus":"open,accepted,rejected,paid,voided", size:200, page:i});
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+
+      if(voucherResult.ok){
+        var voucherResultData = voucherResult.val.content;
+
+        for(var a=0; a<voucherResultData.length; a++){
+          var quotationData = await lexOfficeClient.retrieveQuotation(voucherResultData[a].id);
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+
+          if(quotationData.ok){
+            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": voucherResultData[a].id, "propertyName":"offerid","operator":"EQ"}]}], properties:["email"], limit: 100, after: 0 };
+
+            try {
+              var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);   
+
+              if(apiResponse.total == 0){
+                // Check Contact LexOffice
+                const contactResult = await lexOfficeClient.retrieveContact(quotationData.val.address.contactId);
+
+
+                if(contactResult.ok){
+                  var email = contactResult.val.emailAddresses.business[0];
+
+                  var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": email, "propertyName":"email","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+
+                  try {
+                    var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
+
+                    if(apiResponse.total != 0){
+                      var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"quotation", documentId:quotationData.val.id});
+
+                      var properties = {
+                        "offerid": quotationData.val.id,
+                        "offercreateat": dayjs(quotationData.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                        "angebots_url": documentUrl,
+                        "pipeline": "default",
+                        "dealstage": "363483635",
+                        "closedate": dayjs(quotationData.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                        "amount": "0",
+                        "dealname": "Angebot "+quotationData.val.voucherNumber,
+                        "zahlungs_art": "Direktzahlung"
+                      };
+
+                      var amount = 0;
+                      var lineItems = quotationData.val.lineItems;
+
+                      for(var i=0; i<lineItems.length; i++){
+                        amount = amount+(lineItems[i].unitPrice.netAmount*lineItems[i].quantity);
+                      }
+
+                      properties.amount = amount;
+                      var SimplePublicObjectInput = { properties };
+                      var createDeal = await hubspotClient.crm.deals.basicApi.create(SimplePublicObjectInput);  
+                      await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [quotationData.val.id, createDeal.id]);
+
+                      // Add Products
+                      for(var i=0; i<lineItems.length; i++){
+                        var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": lineItems[i].id, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                        var productApiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest); 
+
+                        if(productApiResponse.total != 0){
+                          var properties = {
+                            "price": lineItems[i].unitPrice.netAmount,
+                            "quantity": lineItems[i].quantity,
+                            "name": productApiResponse.results[0].properties.name,
+                            "hs_product_id": productApiResponse.results[0].id
+                          };
+                          var SimplePublicObjectInput = { properties };
+                          var createLineItem = await hubspotClient.crm.lineItems.basicApi.create(SimplePublicObjectInput);
+                          var updateAssociations = await hubspotClient.crm.lineItems.associationsApi.create(createLineItem.id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 20}]);
+                        }
+                      }
+                      var updateAssociations = await hubspotClient.crm.contacts.associationsApi.create(apiResponse.results[0].id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 4}]);         
+                    }
+                  }catch (err){
+                    console.log(err);
+                  }
+                }
+              }
+            }catch(err){
+              console.log(err);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // Invoice
+  var voucherResult = await lexOfficeClient.retrieveVoucherlist({"voucherType":"invoice", "voucherStatus":"open,accepted,rejected,paid,voided", size:200, page:1});
+  await new Promise(resolve => setTimeout(resolve, 2000));
+
+  if(voucherResult.ok){
+    var totalPages = voucherResult.val.totalPages;
+
+    for(var i=0; i<=totalPages; i++){
+      var voucherResult = await lexOfficeClient.retrieveVoucherlist({"voucherType":"invoice", "voucherStatus":"open,accepted,rejected,paid,voided", size:200, page:i});
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+      var invoiceData = await lexOfficeClient.retrieveInvoice(voucherResultData[a].id);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
+
+      if(invoiceData.ok){
+        var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": voucherResultData[a].id, "propertyName":"invoiceid","operator":"EQ"}]}], properties:["email"], limit: 100, after: 0 };
+
+        try {
+          var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);   
+
+          if(apiResponse.total == 0){
+            // Check Contact LexOffice
+            const contactResult = await lexOfficeClient.retrieveContact(invoiceData.val.address.contactId);
+
+            if(contactResult.ok){
+              var email = contactResult.val.emailAddresses.business[0];
+
+              var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": email, "propertyName":"email","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+
+              try {
+                var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
+
+                if(apiResponse.total != 0){
+                  var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"invoice", documentId:invoiceData.val.id});
+
+                  var foundOffer = false;
+                  var foundOfferId = false;
+                  if(invoiceData.val.relatedVouchers.length != 0){
+                    for(var i=0; i<invoiceData.val.relatedVouchers.length; i++){
+                      if(invoiceData.val.relatedVouchers[i].voucherType == "quotation"){
+                        foundOffer = true;
+                        foundOfferId = invoiceData.val.relatedVouchers[i].id;
+                      }
+                    }
+                  }
+
+                  if(foundOffer){
+                    var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundOfferId, "propertyName":"offerid","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                    var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);
+                    
+                    if(apiResponse.total != 0){
+                      var properties = {
+                        "invoiceid": invoiceData.val.id,
+                        "invoicecreateat": dayjs(invoiceData.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                        "rechnungs_url": documentUrl,
+                        "dealstage": "363483638",
+                      };
+
+                      var SimplePublicObjectInput = { properties };
+                      var createDeal = await hubspotClient.crm.deals.basicApi.update(apiResponse.results[0].id, SimplePublicObjectInput);  
+                      await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [invoiceData.val.id, apiResponse.results[0].id]);
+                    }
+                  }else{
+                    var properties = {
+                      "invoiceid": invoiceData.val.id,
+                      "invoicecreateat": dayjs(invoiceData.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                      "rechnungs_url": documentUrl,
+                      "pipeline": "default",
+                      "dealstage": "363483638",
+                      "closedate": dayjs(invoiceData.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                      "amount": "0",
+                      "dealname": "Rechnung "+invoiceData.val.voucherNumber,
+                      "zahlungs_art": "Direktzahlung"
+                    };
+
+                    var amount = 0;
+                    var lineItems = invoiceData.val.lineItems;
+
+                    for(var i=0; i<lineItems.length; i++){
+                      amount = amount+(lineItems[i].unitPrice.netAmount*lineItems[i].quantity);
+                    }
+
+                    properties.amount = amount;
+                    var SimplePublicObjectInput = { properties };
+                    var createDeal = await hubspotClient.crm.deals.basicApi.create(SimplePublicObjectInput);  
+                    await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [invoiceData.val.id, createDeal.id]);
+
+                    // Add Products
+                    for(var i=0; i<lineItems.length; i++){
+                      var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": lineItems[i].id, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                      var productApiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest); 
+
+                      if(productApiResponse.total != 0){
+                        var properties = {
+                          "price": lineItems[i].unitPrice.netAmount,
+                          "quantity": lineItems[i].quantity,
+                          "name": productApiResponse.results[0].properties.name,
+                          "hs_product_id": productApiResponse.results[0].id
+                        };
+                        var SimplePublicObjectInput = { properties };
+                        var createLineItem = await hubspotClient.crm.lineItems.basicApi.create(SimplePublicObjectInput);
+                        var updateAssociations = await hubspotClient.crm.lineItems.associationsApi.create(createLineItem.id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 20}]);
+                      }
+                    }
+                    var updateAssociations = await hubspotClient.crm.contacts.associationsApi.create(apiResponse.results[0].id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 4}]);         
+                  }
+                }
+              }catch (err){
+                console.log(err);
+              }
+            } 
+          }
+        }catch(err){
+          console.log(err);
+        }
+      }
+    }
+  }
+
+  console.log("Invoice / Offer Import completed");
+}
+//});
+
+//test();
+
 
 
 // ------------------------------------------
