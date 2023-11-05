@@ -1377,67 +1377,69 @@ app.post('/lexofficewebhook', async (req, res) => {
             
             if(result.length == 0){
               // Check Contact LexOffice
-              const contactResult = await lexOfficeClient.retrieveContact(offerResult.val.address.contactId);
+              if(offerResult.val.address.contactId){
+                const contactResult = await lexOfficeClient.retrieveContact(offerResult.val.address.contactId);
 
-              if(contactResult.ok){
-                if(contactResult.val.emailAddresses.business){
-                  var email = contactResult.val.emailAddresses.business[0];
+                if(contactResult.ok){
+                  if(contactResult.val.emailAddresses.business){
+                    var email = contactResult.val.emailAddresses.business[0];
 
-                  var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": email, "propertyName":"email","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                    var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": email, "propertyName":"email","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
 
-                  try {
-                    var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
-            
-                    if(apiResponse.total != 0){
-                      var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"quotation", documentId:offerResult.val.id});
+                    try {
+                      var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
+              
+                      if(apiResponse.total != 0){
+                        var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"quotation", documentId:offerResult.val.id});
 
-                      var properties = {
-                        "offerid": offerResult.val.id,
-                        "offercreateat": dayjs(offerResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
-                        "angebots_url": documentUrl,
-                        "pipeline": "default",
-                        "dealstage": "363483635",
-                        "closedate": dayjs(offerResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
-                        "amount": "0",
-                        "dealname": "Angebot "+offerResult.val.voucherNumber
-                      };
+                        var properties = {
+                          "offerid": offerResult.val.id,
+                          "offercreateat": dayjs(offerResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                          "angebots_url": documentUrl,
+                          "pipeline": "default",
+                          "dealstage": "363483635",
+                          "closedate": dayjs(offerResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                          "amount": "0",
+                          "dealname": "Angebot "+offerResult.val.voucherNumber
+                        };
 
-                      var amount = 0;
-                      var lineItems = offerResult.val.lineItems;
+                        var amount = 0;
+                        var lineItems = offerResult.val.lineItems;
 
-                      for(var i=0; i<lineItems.length; i++){
-                        amount = amount+(lineItems[i].unitPrice.netAmount*lineItems[i].quantity);
-                      }
-
-                      properties.amount = amount;
-                      var SimplePublicObjectInput = { properties };
-                      var createDeal = await hubspotClient.crm.deals.basicApi.create(SimplePublicObjectInput);  
-                      await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [offerResult.val.id, createDeal.id]);
-
-                      // Add Products
-                      for(var i=0; i<lineItems.length; i++){
-                        var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": lineItems[i].id, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
-                        var productApiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest); 
-
-                        if(productApiResponse.total != 0){
-                          var properties = {
-                            "price": lineItems[i].unitPrice.netAmount,
-                            "quantity": lineItems[i].quantity,
-                            "name": productApiResponse.results[0].properties.name,
-                            "hs_product_id": productApiResponse.results[0].id
-                          };
-                          var SimplePublicObjectInput = { properties };
-                          var createLineItem = await hubspotClient.crm.lineItems.basicApi.create(SimplePublicObjectInput);
-                          var updateAssociations = await hubspotClient.crm.lineItems.associationsApi.create(createLineItem.id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 20}]);
+                        for(var i=0; i<lineItems.length; i++){
+                          amount = amount+(lineItems[i].unitPrice.netAmount*lineItems[i].quantity);
                         }
+
+                        properties.amount = amount;
+                        var SimplePublicObjectInput = { properties };
+                        var createDeal = await hubspotClient.crm.deals.basicApi.create(SimplePublicObjectInput);  
+                        await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [offerResult.val.id, createDeal.id]);
+
+                        // Add Products
+                        for(var i=0; i<lineItems.length; i++){
+                          var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": lineItems[i].id, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                          var productApiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest); 
+
+                          if(productApiResponse.total != 0){
+                            var properties = {
+                              "price": lineItems[i].unitPrice.netAmount,
+                              "quantity": lineItems[i].quantity,
+                              "name": productApiResponse.results[0].properties.name,
+                              "hs_product_id": productApiResponse.results[0].id
+                            };
+                            var SimplePublicObjectInput = { properties };
+                            var createLineItem = await hubspotClient.crm.lineItems.basicApi.create(SimplePublicObjectInput);
+                            var updateAssociations = await hubspotClient.crm.lineItems.associationsApi.create(createLineItem.id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 20}]);
+                          }
+                        }
+                        var updateAssociations = await hubspotClient.crm.contacts.associationsApi.create(apiResponse.results[0].id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 4}]);         
                       }
-                      var updateAssociations = await hubspotClient.crm.contacts.associationsApi.create(apiResponse.results[0].id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 4}]);         
+                    }catch (err){
+                      console.log(err);
                     }
-                  }catch (err){
-                    console.log(err);
                   }
-                }
-              }  
+                }  
+              }
             }
           }
         }
@@ -1509,94 +1511,96 @@ app.post('/lexofficewebhook', async (req, res) => {
             
             if(result.length == 0){
               // Check Contact LexOffice
-              const contactResult = await lexOfficeClient.retrieveContact(invoiceResult.val.address.contactId);
+              if(invoiceResult.val.address.contactId){
+                const contactResult = await lexOfficeClient.retrieveContact(invoiceResult.val.address.contactId);
 
-              if(contactResult.ok){
-                var email = contactResult.val.emailAddresses.business[0];
+                if(contactResult.ok){
+                  var email = contactResult.val.emailAddresses.business[0];
 
-                var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": email, "propertyName":"email","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                  var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": email, "propertyName":"email","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
 
-                try {
-                  var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
-          
-                  if(apiResponse.total != 0){
-                    var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"invoice", documentId:invoiceResult.val.id});
+                  try {
+                    var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
+            
+                    if(apiResponse.total != 0){
+                      var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"invoice", documentId:invoiceResult.val.id});
 
-                    var foundOffer = false;
-                    var foundOfferId = false;
-                    if(invoiceResult.val.relatedVouchers.length != 0){
-                      for(var i=0; i<invoiceResult.val.relatedVouchers.length; i++){
-                        if(invoiceResult.val.relatedVouchers[i].voucherType == "quotation"){
-                          foundOffer = true;
-                          foundOfferId = invoiceResult.val.relatedVouchers[i].id;
+                      var foundOffer = false;
+                      var foundOfferId = false;
+                      if(invoiceResult.val.relatedVouchers.length != 0){
+                        for(var i=0; i<invoiceResult.val.relatedVouchers.length; i++){
+                          if(invoiceResult.val.relatedVouchers[i].voucherType == "quotation"){
+                            foundOffer = true;
+                            foundOfferId = invoiceResult.val.relatedVouchers[i].id;
+                          }
                         }
                       }
-                    }
 
-                    if(foundOffer){
-                      var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundOfferId, "propertyName":"offerid","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
-                      var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);
-                      
-                      if(apiResponse.total != 0){
+                      if(foundOffer){
+                        var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundOfferId, "propertyName":"offerid","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                        var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);
+                        
+                        if(apiResponse.total != 0){
+                          var properties = {
+                            "invoiceid": invoiceResult.val.id,
+                            "invoicecreateat": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                            "rechnungs_url": documentUrl,
+                            "dealstage": "363483638"
+                          };
+
+                          var SimplePublicObjectInput = { properties };
+                          var createDeal = await hubspotClient.crm.deals.basicApi.update(apiResponse.results[0].id, SimplePublicObjectInput);  
+                          await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [invoiceResult.val.id, apiResponse.results[0].id]);
+                        }
+                      }else{
                         var properties = {
                           "invoiceid": invoiceResult.val.id,
                           "invoicecreateat": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
                           "rechnungs_url": documentUrl,
-                          "dealstage": "363483638"
+                          "pipeline": "default",
+                          "dealstage": "363483638",
+                          "closedate": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
+                          "amount": "0",
+                          "dealname": "Rechnung "+invoiceResult.val.voucherNumber
                         };
 
-                        var SimplePublicObjectInput = { properties };
-                        var createDeal = await hubspotClient.crm.deals.basicApi.update(apiResponse.results[0].id, SimplePublicObjectInput);  
-                        await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [invoiceResult.val.id, apiResponse.results[0].id]);
-                      }
-                    }else{
-                      var properties = {
-                        "invoiceid": invoiceResult.val.id,
-                        "invoicecreateat": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
-                        "rechnungs_url": documentUrl,
-                        "pipeline": "default",
-                        "dealstage": "363483638",
-                        "closedate": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
-                        "amount": "0",
-                        "dealname": "Rechnung "+invoiceResult.val.voucherNumber
-                      };
+                        var amount = 0;
+                        var lineItems = invoiceResult.val.lineItems;
 
-                      var amount = 0;
-                      var lineItems = invoiceResult.val.lineItems;
-
-                      for(var i=0; i<lineItems.length; i++){
-                        amount = amount+(lineItems[i].unitPrice.netAmount*lineItems[i].quantity);
-                      }
-
-                      properties.amount = amount;
-                      var SimplePublicObjectInput = { properties };
-                      var createDeal = await hubspotClient.crm.deals.basicApi.create(SimplePublicObjectInput);  
-                      await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [invoiceResult.val.id, createDeal.id]);
-
-                      // Add Products
-                      for(var i=0; i<lineItems.length; i++){
-                        var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": lineItems[i].id, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
-                        var productApiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest); 
-
-                        if(productApiResponse.total != 0){
-                          var properties = {
-                            "price": lineItems[i].unitPrice.netAmount,
-                            "quantity": lineItems[i].quantity,
-                            "name": productApiResponse.results[0].properties.name,
-                            "hs_product_id": productApiResponse.results[0].id
-                          };
-                          var SimplePublicObjectInput = { properties };
-                          var createLineItem = await hubspotClient.crm.lineItems.basicApi.create(SimplePublicObjectInput);
-                          var updateAssociations = await hubspotClient.crm.lineItems.associationsApi.create(createLineItem.id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 20}]);
+                        for(var i=0; i<lineItems.length; i++){
+                          amount = amount+(lineItems[i].unitPrice.netAmount*lineItems[i].quantity);
                         }
+
+                        properties.amount = amount;
+                        var SimplePublicObjectInput = { properties };
+                        var createDeal = await hubspotClient.crm.deals.basicApi.create(SimplePublicObjectInput);  
+                        await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [invoiceResult.val.id, createDeal.id]);
+
+                        // Add Products
+                        for(var i=0; i<lineItems.length; i++){
+                          var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": lineItems[i].id, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                          var productApiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest); 
+
+                          if(productApiResponse.total != 0){
+                            var properties = {
+                              "price": lineItems[i].unitPrice.netAmount,
+                              "quantity": lineItems[i].quantity,
+                              "name": productApiResponse.results[0].properties.name,
+                              "hs_product_id": productApiResponse.results[0].id
+                            };
+                            var SimplePublicObjectInput = { properties };
+                            var createLineItem = await hubspotClient.crm.lineItems.basicApi.create(SimplePublicObjectInput);
+                            var updateAssociations = await hubspotClient.crm.lineItems.associationsApi.create(createLineItem.id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 20}]);
+                          }
+                        }
+                        var updateAssociations = await hubspotClient.crm.contacts.associationsApi.create(apiResponse.results[0].id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 4}]);         
                       }
-                      var updateAssociations = await hubspotClient.crm.contacts.associationsApi.create(apiResponse.results[0].id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 4}]);         
                     }
+                  }catch (err){
+                    console.log(err);
                   }
-                }catch (err){
-                  console.log(err);
-                }
-              }  
+                }  
+              }
             }
           }
         }
