@@ -1674,67 +1674,6 @@ app.post('/lexofficewebhook', async (req, res) => {
             }
           }
         }
-
-
-
-        /*
-
-
-
-                     var properties = {
-                        "invoiceid": invoiceResult.val.id,
-                        "invoicecreateat": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
-                        "rechnungs_url": documentUrl,
-                        "pipeline": "default",
-                        "dealstage": "363483638",
-                        "closedate": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
-                        "amount": "0",
-                        "dealname": "Rechnung "+invoiceResult.val.voucherNumber
-                      };
-
-                      var amount = 0;
-                      var lineItems = invoiceResult.val.lineItems;
-
-                      for(var i=0; i<lineItems.length; i++){
-                        amount = amount+(lineItems[i].unitPrice.netAmount*lineItems[i].quantity);
-                      }
-
-                      properties.amount = amount;
-                      var SimplePublicObjectInput = { properties };
-                      var createDeal = await hubspotClient.crm.deals.basicApi.create(SimplePublicObjectInput);  
-
-
-
-
-
-
-
-// Check Contact LexOffice
-const contactResult = await lexOfficeClient.filterContact({"email": contactData.properties.email});
-
-if(contactResult.ok){
-  var contactId = '';
-  if(contactResult.val.numberOfElements != 0){
-    contactId = contactResult.val.content[0].id;
-  }else{
-    // Create LexOffice Contact
-
-
-    
-
-
-  
-                    
-    const contactResult = await lexOfficeClient.createContact(contactObject);
-    contactId = contactResult.val.id;
-  }
-  */
-
-
-
-
-
-
       }
     }
   }
