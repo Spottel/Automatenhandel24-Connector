@@ -51,6 +51,19 @@ CREATE TABLE `error_log` (
 -- --------------------------------------------------------
 
 --
+-- Tabellenstruktur für Tabelle `lexoffice_hubspot`
+--
+
+CREATE TABLE `lexoffice_hubspot` (
+  `id` int(11) NOT NULL,
+  `deal_id` text NOT NULL,
+  `document_id` text NOT NULL,
+  `over_lexoffice` int(1) NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Tabellenstruktur für Tabelle `setting_data`
 --
 
@@ -98,6 +111,13 @@ ALTER TABLE `access_token`
 -- Indizes für die Tabelle `error_log`
 --
 ALTER TABLE `error_log`
+  ADD PRIMARY KEY (`id`);
+
+
+--
+-- Indizes für die Tabelle `lexoffice_hubspot`
+--
+ALTER TABLE `lexoffice_hubspot`
   ADD PRIMARY KEY (`id`);
 
 --
