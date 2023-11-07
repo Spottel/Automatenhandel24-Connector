@@ -650,15 +650,33 @@ app.post('/hubspotwebhook', async (req, res) => {
                     var SimplePublicObjectInput = { properties };
                     await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);                  
                   } else {
-                    errorlogging.saveError("error", "lexoffice", "Error create offer", "");
+                    errorlogging.saveError("error", "lexoffice", "Error create offer from Deal "+dealId, createdOfferResult);
+
+                    var properties = {
+                      "dealstage": "qualifiedtobuy"
+                    };
+                    var SimplePublicObjectInput = { properties };
+                    await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);   
                   }
                 }else{
                   errorlogging.saveError("error", "lexoffice", "Error search contact", "");
+
+                  var properties = {
+                    "dealstage": "qualifiedtobuy"
+                  };
+                  var SimplePublicObjectInput = { properties };
+                  await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);   
                 }
 
               } catch (err) {
                 errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
                 console.log(date+" - "+err);
+
+                var properties = {
+                  "dealstage": "qualifiedtobuy"
+                };
+                var SimplePublicObjectInput = { properties };
+                await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);   
               }
             }
           } catch (err) {
@@ -926,7 +944,7 @@ app.post('/hubspotwebhook', async (req, res) => {
                       await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
                     }
                   } else {
-                    errorlogging.saveError("error", "lexoffice", "Error create invoice", "");
+                    errorlogging.saveError("error", "lexoffice", "Error create invoice rom deal "+dealId, createdInvoiceResult);
                   }
 
                 }else{
