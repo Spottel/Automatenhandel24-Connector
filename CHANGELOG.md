@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.1](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.3.0...v1.3.1) (2023-11-08)
+
+
+### Bug Fixes
+
+* :bug: Bugfix error saving ([abfd208](https://github.com/Spottel/Automatenhandel24-Connector/commit/abfd2086f0da38580889d2ed66f6bb9bb555fd92))
+
 ## [1.3.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.2.0...v1.3.0) (2023-11-05)
 
 
