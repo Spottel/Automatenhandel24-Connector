@@ -1265,7 +1265,38 @@ app.post('/hubspotwebhook', async (req, res) => {
           var SimplePublicObjectInput = { properties };
           await hubspotClient.crm.contacts.basicApi.update(contactId, SimplePublicObjectInput, undefined); 
 
-          
+          // Send Mail to Auto Leads
+          var properties = ["email", "hs_analytics_source", "welcome_message"];
+              
+          try {
+            var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
+
+            if(contactData.properties.email != "" && contactData.properties.email != null){
+              if(contactData.properties.welcome_message != "" || contactData.properties.welcome_message != null){
+                if(contactData.properties.hs_analytics_source == "DIRECT_TRAFFIC" || contactData.properties.hs_analytics_source == "REFERRALS" || contactData.properties.hs_analytics_source == "SOCIAL_MEDIA" || contactData.properties.hs_analytics_source == "EMAIL_MARKETING" || contactData.properties.hs_analytics_source == "PAID_SEARCH" || contactData.properties.hs_analytics_source == "ORGANIC_SEARCH"){
+                  
+                  var mailSubject = replacePlaceholder(await settings.getSettingData('autoleadsmailsubject'), contactData.properties);
+                  var mailBody = replacePlaceholder(await settings.getSettingData('autoleadsmailbody'), contactData.properties);
+
+                  // SEND MAIL
+                  await mailer.sendMail(await settings.getSettingData('mailersentmail'), contactData.properties.email, mailSubject, mailBody, mailBody);
+                  
+                  // Save Welcome Mail
+                  var properties = {
+                    "welcome_message": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD')
+                  };
+                  var SimplePublicObjectInput = { properties };
+                  await hubspotClient.crm.contacts.basicApi.update(contactId, SimplePublicObjectInput, undefined); 
+
+                }
+              }
+            }
+
+          }catch(err){
+            errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
+            console.log(date+" - "+err);
+          }
+
         }
       }
     }else{
