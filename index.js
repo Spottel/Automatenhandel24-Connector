@@ -1252,6 +1252,21 @@ app.post('/hubspotwebhook', async (req, res) => {
           }
 
         }
+
+        // Create Lead
+        if (body.subscriptionType == "contact.creation") {
+          var contactId = body.objectId;
+
+          const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
+
+          var properties = {
+            "hs_lead_status": "NEW"
+          };
+          var SimplePublicObjectInput = { properties };
+          await hubspotClient.crm.contacts.basicApi.update(contactId, SimplePublicObjectInput, undefined); 
+
+          
+        }
       }
     }else{
       //errorlogging.saveError("error", "hubspot", "Error to with HMAC Key", "");
