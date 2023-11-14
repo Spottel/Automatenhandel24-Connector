@@ -1481,6 +1481,54 @@ app.post('/lexofficewebhook', async (req, res) => {
                             }
                           }
                           var updateAssociations = await hubspotClient.crm.contacts.associationsApi.create(apiResponse.results[0].id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 4}]);         
+                        
+                        
+                        
+                          // Send Offer Mail
+                          var properties = ["email", "firstname", "lastname", "company", "address", "zip", "city", "salutation"];
+                          var contactData = await hubspotClient.crm.contacts.basicApi.getById(apiResponse.results[0].id, properties, undefined, undefined, false);
+
+
+                          const createdOfferResultFile = await lexOfficeClient.renderQuotationDocumentFileId(offerResult.val.id);
+
+                          if (createdOfferResultFile.ok) {
+                            const downloadFile = await lexOfficeClient.downloadFile(createdOfferResultFile.val.documentFileId);
+
+                            const browser = await playwright.firefox.launch({headless: true})
+                            const page = await browser.newPage();
+                            await page.goto('https://app.lexoffice.de/sign-in/authenticate?redirect=%2Fvouchers%23!%2Fview%2F'+offerResult.val.id);
+                            await page.fill('#mui-1', await settings.getSettingData('lexofficelogin'));
+                            await page.fill('#mui-2', await settings.getSettingData('lexofficepassword'));
+                            await page.click("text=Alle akzeptieren");
+                            await page.click("text=ANMELDEN");
+                            await page.waitForLoadState('networkidle');
+                            var link = await page.locator('a:has-text("Link kopieren")').getAttribute('data-clipboard-text')
+                            await browser.close();
+
+                            const createdOfferData = await lexOfficeClient.retrieveQuotation(offerResult.val.id);
+
+
+                            contactData.properties.offerLink = link;
+                            contactData.properties.offerNumber = createdOfferData.val.voucherNumber;
+
+
+                            var mailSubject = replacePlaceholder(await settings.getSettingData('offermailmailsubject'), contactData.properties);
+                            var mailBody = replacePlaceholder(await settings.getSettingData('offermailmailbody'), contactData.properties);
+
+
+                            // SEND MAIL
+                            await mailer.sendMail(await settings.getSettingData('mailersentmail'), contactData.properties.email, mailSubject, mailBody, mailBody,[{
+                                filename: 'angebot.pdf',
+                                content: downloadFile.val,
+                                encoding: 'base64'
+                            },{
+                                filename: 'AGB Automatenhandel24.pdf',
+                                path: './public/files/AGB Automatenhandel24.pdf'
+                            }]);
+                          }
+
+                       
+                        
                         }
                       }catch (err){
                         console.log(err);
@@ -1574,6 +1622,7 @@ app.post('/lexofficewebhook', async (req, res) => {
                         var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
                 
                         if(apiResponse.total != 0){
+                          var contactId = apiResponse.results[0].id;
                           var documentUrl = replacePlaceholder(await settings.getSettingData('lexofficedocumenturl'), {type:"invoice", documentId:invoiceResult.val.id});
 
                           var foundOffer = false;
@@ -1602,6 +1651,50 @@ app.post('/lexofficewebhook', async (req, res) => {
                               var SimplePublicObjectInput = { properties };
                               var createDeal = await hubspotClient.crm.deals.basicApi.update(apiResponse.results[0].id, SimplePublicObjectInput);  
                               await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [invoiceResult.val.id, apiResponse.results[0].id]);
+                            
+                            
+
+
+                              // Send Invoice Mail
+                              var properties = ["email", "firstname", "lastname", "company", "address", "zip", "city", "salutation"];
+                              var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
+
+                              const createdInvoiceResultFile = await lexOfficeClient.renderInvoiceDocumentFileId(invoiceResult.val.id);
+                              if (createdInvoiceResultFile.ok) {
+                                const downloadFile = await lexOfficeClient.downloadFile(createdInvoiceResultFile.val.documentFileId);
+
+                                const browser = await playwright.firefox.launch({headless: true})
+                                const page = await browser.newPage();
+                                await page.goto('https://app.lexoffice.de/sign-in/authenticate?redirect=%2Fvouchers%23!%2Fview%2F'+invoiceResult.val.id);
+                                await page.fill('#mui-1', await settings.getSettingData('lexofficelogin'));
+                                await page.fill('#mui-2', await settings.getSettingData('lexofficepassword'));
+                                await page.click("text=Alle akzeptieren");
+                                await page.click("text=ANMELDEN");
+                                await page.waitForLoadState('networkidle');
+                                var link = await page.locator('a:has-text("Link kopieren")').getAttribute('data-clipboard-text')
+                                await browser.close();
+
+                                const createdInvoiceData = await lexOfficeClient.retrieveInvoice(invoiceResult.val.id);
+
+                                contactData.properties.invoiceLink = link;
+                                contactData.properties.invoiceNumber = createdInvoiceData.val.voucherNumber;
+
+                                var mailSubject = replacePlaceholder(await settings.getSettingData('invoicemailmailsubject'), contactData.properties);
+                                var mailBody = replacePlaceholder(await settings.getSettingData('invoicemailmailbody'), contactData.properties);
+                    
+                                // SEND MAIL
+                                await mailer.sendMail(await settings.getSettingData('mailersentmail'), contactData.properties.email, mailSubject, mailBody, mailBody,[{
+                                    filename: 'rechnung.pdf',
+                                    content: downloadFile.val,
+                                    encoding: 'base64'
+                                },{
+                                  filename: 'AGB Automatenhandel24.pdf',
+                                  path: './public/files/AGB Automatenhandel24.pdf'
+                                }]);
+                              }
+                            
+                            
+                            
                             }
                           }else{
                             /*
