@@ -455,16 +455,7 @@ app.post('/hubspotwebhook', async (req, res) => {
                     if(contactData.properties.company != null){
                       contactObject.company = {
                         "emailAddress": contactData.properties.email,
-                        "name": contactData.properties.company,
-                        "contactPersons": [
-                            {
-                              "salutation": contactData.properties.salutation,
-                              "firstName": contactData.properties.firstname,
-                              "lastName": contactData.properties.lastname,
-                              "primary": true,
-                              "emailAddress": contactData.properties.email
-                            }
-                        ]
+                        "name": contactData.properties.company
                       }
                     }else{
                       contactObject.person = {
@@ -491,7 +482,7 @@ app.post('/hubspotwebhook', async (req, res) => {
                         contactData.properties.email
                       ]
                     };
-                                    
+
                     const contactResult = await lexOfficeClient.createContact(contactObject);
                     contactId = contactResult.val.id;
                   }
@@ -658,6 +649,7 @@ app.post('/hubspotwebhook', async (req, res) => {
                     var SimplePublicObjectInput = { properties };
                     await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);   
                   }
+
                 }else{
                   errorlogging.saveError("error", "lexoffice", "Error search contact", "");
 
@@ -732,16 +724,7 @@ app.post('/hubspotwebhook', async (req, res) => {
                     if(contactData.properties.company != null){
                       contactObject.company = {
                         "emailAddress": contactData.properties.email,
-                        "name": contactData.properties.company,
-                        "contactPersons": [
-                            {
-                              "salutation": contactData.properties.salutation,
-                              "firstName": contactData.properties.firstname,
-                              "lastName": contactData.properties.lastname,
-                              "primary": true,
-                              "emailAddress": contactData.properties.email
-                            }
-                        ]
+                        "name": contactData.properties.company
                       }
                     }else{
                       contactObject.person = {
@@ -1889,7 +1872,7 @@ cron.schedule('0 0 * * *', async function() {
  * Import Products
  * 
  */
-cron.schedule('0 2 * * *', async function() {
+cron.schedule('0 */2 * * *', async function() {
   const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
 
   dayjs.extend(utc)
