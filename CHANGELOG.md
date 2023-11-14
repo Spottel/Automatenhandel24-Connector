@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.3.1...v1.4.0) (2023-11-14)
+
+
+### Features
+
+* :sparkles: Send automatically a message to new leads ([a535868](https://github.com/Spottel/Automatenhandel24-Connector/commit/a5358689583c72d77dc0282f9cf13ea1562d8824))
+
 ## [1.3.1](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.3.0...v1.3.1) (2023-11-08)
 
 
