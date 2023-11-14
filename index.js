@@ -2119,6 +2119,9 @@ cron.schedule('0 */2 * * *', async function() {
         if(apiResponse.total == 0){
           var SimplePublicObjectInput = { properties };
           var apiResponse = await hubspotClient.crm.products.basicApi.create(SimplePublicObjectInput); 
+        }else{
+          var SimplePublicObjectInput = { properties };
+          var apiResponse = await hubspotClient.crm.products.basicApi.update(apiResponse.results[0].id, SimplePublicObjectInput); 
         }
       }catch (err){
         errorlogging.saveError("error", "lexoffice", "Error import product ("+await page.locator('input[name="title"]').inputValue()+")", err);
