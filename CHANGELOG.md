@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.4.0...v1.5.0) (2023-11-14)
+
+
+### Features
+
+* :sparkles: Auto Mail by LexOffice Invoice ([3c0953c](https://github.com/Spottel/Automatenhandel24-Connector/commit/3c0953c47452866b1dc91daaf5b3b8c2030b4657))
+* :sparkles: Auto Mail by open LexOffice Offers ([9079fc6](https://github.com/Spottel/Automatenhandel24-Connector/commit/9079fc6f81d63f1c5ae35f5cf15c6adc0c08c38e))
+
 ## [1.4.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.3.1...v1.4.0) (2023-11-14)
 
 
