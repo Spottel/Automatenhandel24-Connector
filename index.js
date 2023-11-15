@@ -405,12 +405,12 @@ app.post('/hubspotwebhook', async (req, res) => {
     var date = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD HH:mm:ss');
 
     // LexOffice Api Client
-    const lexOfficeClient = new lexoffice.Client(await settings.getSettingData('lexofficeapikey'))
+    const lexOfficeClient = new lexoffice.Client(await settings.getSettingData('lexofficeapikey'));
 
     if(gen_hash == req.headers['x-hubspot-signature']){
       if (body.subscriptionType) {      
         // Send Offer
-        if (body.subscriptionType == "deal.propertyChange" && body.propertyName == "dealstage" && body.propertyValue == "363483635") {          
+        if (body.subscriptionType == "deal.propertyChange" && body.propertyName == "dealstage" && body.propertyValue == "363483635") {  
           var dealId = body.objectId;
 
           // Lead Deal Data
@@ -433,7 +433,7 @@ app.post('/hubspotwebhook', async (req, res) => {
               
               try {
                 var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
-
+        
                 // Check Contact LexOffice
                 const contactResult = await lexOfficeClient.filterContact({"email": contactData.properties.email});
 
@@ -509,7 +509,8 @@ app.post('/hubspotwebhook', async (req, res) => {
                   var taxAmounts = [];
 
                   for(var i=0; i<productList.length; i++){
-                    var lineItemData = await hubspotClient.crm.lineItems.basicApi.getById(productList[i].id );
+                    var properties = ["hs_product_id", "hs_discount_percentage", "quantity", "price", "hs_total_discount"];
+                    var lineItemData = await hubspotClient.crm.lineItems.basicApi.getById(productList[i].id, properties );
 
                     var properties = ["name", "description", "price", "steuer_satz"];
                     var productData = await hubspotClient.crm.products.basicApi.getById(lineItemData.properties.hs_product_id, properties );
@@ -517,13 +518,24 @@ app.post('/hubspotwebhook', async (req, res) => {
                     var taxRate = productData.properties.steuer_satz;
                     taxRate = parseFloat(taxRate.replace(" %", ""));
 
-                    netAmount = parseFloat(productData.properties.price);
+                    netAmount = parseFloat(lineItemData.properties.price);
                     taxAmount = (netAmount/100*taxRate);
                     grossAmount = taxAmount+netAmount;
 
                     totalPrice.totalNetAmount = totalPrice.totalNetAmount+netAmount;
                     totalPrice.totalGrossAmount = totalPrice.totalGrossAmount+grossAmount;
                     totalPrice.totalTaxAmount = totalPrice.totalTaxAmount+taxAmount;
+
+
+                    if(lineItemData.properties.hs_total_discount != null && lineItemData.properties.hs_total_discount != 0){
+                      if(!totalPrice.totalDiscountAbsolute){
+                        totalPrice.totalDiscountAbsolute = 0
+                      }
+
+                      totalPrice.totalDiscountAbsolute = totalPrice.totalDiscountAbsolute+parseFloat(lineItemData.properties.hs_total_discount);
+                    }
+
+       
 
                     var foundTaxes = -1;
                     for(var a=0; a<taxAmounts.length; a++){
@@ -639,7 +651,8 @@ app.post('/hubspotwebhook', async (req, res) => {
                       "angebots_url": documentUrl
                     };
                     var SimplePublicObjectInput = { properties };
-                    await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);                  
+                    await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);      
+                                
                   } else {
                     errorlogging.saveError("error", "lexoffice", "Error create offer from Deal "+dealId, createdOfferResult);
 
@@ -649,7 +662,6 @@ app.post('/hubspotwebhook', async (req, res) => {
                     var SimplePublicObjectInput = { properties };
                     await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);   
                   }
-
                 }else{
                   errorlogging.saveError("error", "lexoffice", "Error search contact", "");
 
@@ -658,7 +670,7 @@ app.post('/hubspotwebhook', async (req, res) => {
                   };
                   var SimplePublicObjectInput = { properties };
                   await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);   
-                }
+                }              
 
               } catch (err) {
                 errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
@@ -778,7 +790,8 @@ app.post('/hubspotwebhook', async (req, res) => {
                   var taxAmounts = [];
 
                   for(var i=0; i<productList.length; i++){
-                    var lineItemData = await hubspotClient.crm.lineItems.basicApi.getById(productList[i].id );
+                    var properties = ["hs_product_id", "hs_discount_percentage", "quantity", "price", "hs_total_discount"];
+                    var lineItemData = await hubspotClient.crm.lineItems.basicApi.getById(productList[i].id, properties);
 
                     var properties = ["name", "description", "price", "steuer_satz"];
                     var productData = await hubspotClient.crm.products.basicApi.getById(lineItemData.properties.hs_product_id, properties );
@@ -786,13 +799,22 @@ app.post('/hubspotwebhook', async (req, res) => {
                     var taxRate = productData.properties.steuer_satz;
                     taxRate = parseFloat(taxRate.replace(" %", ""));
 
-                    netAmount = parseFloat(productData.properties.price);
+
+                    netAmount = parseFloat(lineItemData.properties.price);
                     taxAmount = (netAmount/100*taxRate);
                     grossAmount = taxAmount+netAmount;
 
                     totalPrice.totalNetAmount = totalPrice.totalNetAmount+netAmount;
                     totalPrice.totalGrossAmount = totalPrice.totalGrossAmount+grossAmount;
                     totalPrice.totalTaxAmount = totalPrice.totalTaxAmount+taxAmount;
+
+                    if(lineItemData.properties.hs_total_discount != null && lineItemData.properties.hs_total_discount != 0){
+                      if(!totalPrice.totalDiscountAbsolute){
+                        totalPrice.totalDiscountAbsolute = 0
+                      }
+
+                      totalPrice.totalDiscountAbsolute = totalPrice.totalDiscountAbsolute+parseFloat(lineItemData.properties.hs_total_discount);
+                    }
 
                     var foundTaxes = -1;
                     for(var a=0; a<taxAmounts.length; a++){
@@ -1452,16 +1474,37 @@ app.post('/lexofficewebhook', async (req, res) => {
                           };
 
                           var amount = 0;
+
+                          var totalDiscountAbsolute = 0;
+                          var totalDiscountPercentage = 0;
+
+                          if(offerResult.val.totalPrice.totalDiscountAbsolute){
+                            totalDiscountAbsolute = parseFloat(offerResult.val.totalPrice.totalDiscountAbsolute);
+                          }else if(offerResult.val.totalPrice.totalDiscountPercentage){
+                            totalDiscountPercentage = parseFloat(offerResult.val.totalPrice.totalDiscountPercentage);
+                          }
                           var lineItems = offerResult.val.lineItems;
 
                           for(var i=0; i<lineItems.length; i++){
                             amount = amount+(lineItems[i].unitPrice.netAmount*lineItems[i].quantity);
+
+                            if(lineItems[i].discountPercentage && lineItems[i].discountPercentage != 0){
+                              amountValue = amount/100*parseFloat(lineItems[i].discountPercentage);
+                              amount = amount-amountValue;
+                            }
                           }
+
+                          amount = amount-totalDiscountAbsolute;
+
+                          amountValue = amount/100*totalDiscountPercentage;
+                          amount = amount-amountValue;
 
                           properties.amount = amount;
                           var SimplePublicObjectInput = { properties };
                           var createDeal = await hubspotClient.crm.deals.basicApi.create(SimplePublicObjectInput);  
                           await database.awaitQuery(`INSERT INTO lexoffice_hubspot (document_id, deal_id, over_lexoffice) VALUES (?, ?, 1)`, [offerResult.val.id, createDeal.id]);
+
+
 
                           // Add Products
                           for(var i=0; i<lineItems.length; i++){
@@ -1475,6 +1518,25 @@ app.post('/lexofficewebhook', async (req, res) => {
                                 "name": productApiResponse.results[0].properties.name,
                                 "hs_product_id": productApiResponse.results[0].id
                               };
+
+                              if(lineItems[i].discountPercentage && lineItems[i].discountPercentage != 0){
+                                properties.hs_discount_percentage = parseFloat(lineItems[i].discountPercentage);
+                              }
+
+                              if(totalDiscountAbsolute != 0){
+                                properties.discount = totalDiscountAbsolute;
+                                totalDiscountAbsolute = 0;
+                              }
+
+                              if(totalDiscountPercentage != 0){
+                                if(lineItems[i].discountPercentage && lineItems[i].discountPercentage != 0){
+                                  properties.hs_discount_percentage = properties.hs_discount_percentage+parseFloat(totalDiscountPercentage);
+                                }else{
+                                  properties.hs_discount_percentage = parseFloat(totalDiscountPercentage);
+                                }
+                                totalDiscountPercentage  = 0;
+                              }
+
                               var SimplePublicObjectInput = { properties };
                               var createLineItem = await hubspotClient.crm.lineItems.basicApi.create(SimplePublicObjectInput);
                               var updateAssociations = await hubspotClient.crm.lineItems.associationsApi.create(createLineItem.id, 'deals', createDeal.id, [{'associationCategory':'HUBSPOT_DEFINED', 'associationTypeId': 20}]);
@@ -2396,7 +2458,6 @@ async function test(){
 //});
 
 //test();
-
 
 
 // ------------------------------------------
