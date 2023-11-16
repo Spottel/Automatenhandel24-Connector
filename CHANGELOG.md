@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.6.0...v1.7.0) (2023-11-16)
+
+
+### Features
+
+* :zap: All 30 minutes sync from LexOffice Products to Hubspot ([4de5b75](https://github.com/Spottel/Automatenhandel24-Connector/commit/4de5b75daf01458678a951ab951d5a1856e12c18))
+
 ## [1.6.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.5.0...v1.6.0) (2023-11-16)
 
 
