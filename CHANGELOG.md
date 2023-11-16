@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.5.0...v1.6.0) (2023-11-16)
+
+
+### Features
+
+* :sparkles: Check for lexoffice offer discounts ([9120215](https://github.com/Spottel/Automatenhandel24-Connector/commit/912021594fcb240b60edf6f885d2c339f92e72ce))
+
 ## [1.5.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.4.0...v1.5.0) (2023-11-14)
 
 
