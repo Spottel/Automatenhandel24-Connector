@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.1](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.7.0...v1.7.1) (2023-11-16)
+
+
+### Bug Fixes
+
+* :bug: Not import negative prices ([c3dcb21](https://github.com/Spottel/Automatenhandel24-Connector/commit/c3dcb210005231feae9501c2ebc7ec1513247172))
+
 ## [1.7.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.6.0...v1.7.0) (2023-11-16)
 
 
