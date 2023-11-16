@@ -659,7 +659,8 @@ app.post('/hubspotwebhook', async (req, res) => {
                     var properties = {
                       "offerid": createdOfferResult.val.id,
                       "offercreateat": dayjs(createdOfferResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
-                      "angebots_url": documentUrl
+                      "angebots_url": documentUrl,
+                      "fehlermeldung": ""
                     };
                     var SimplePublicObjectInput = { properties };
                     await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);      
@@ -668,7 +669,8 @@ app.post('/hubspotwebhook', async (req, res) => {
                     errorlogging.saveError("error", "lexoffice", "Error create offer from Deal "+dealId, createdOfferResult);
 
                     var properties = {
-                      "dealstage": "qualifiedtobuy"
+                      "dealstage": "qualifiedtobuy",
+                      "fehlermeldung": JSON.stringify(createdOfferResult)
                     };
                     var SimplePublicObjectInput = { properties };
                     await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);   
@@ -677,7 +679,8 @@ app.post('/hubspotwebhook', async (req, res) => {
                   errorlogging.saveError("error", "lexoffice", "Error search contact", "");
 
                   var properties = {
-                    "dealstage": "qualifiedtobuy"
+                    "dealstage": "qualifiedtobuy",
+                    "fehlermeldung": "Error search contact"
                   };
                   var SimplePublicObjectInput = { properties };
                   await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);   
@@ -688,7 +691,8 @@ app.post('/hubspotwebhook', async (req, res) => {
                 console.log(date+" - "+err);
 
                 var properties = {
-                  "dealstage": "qualifiedtobuy"
+                  "dealstage": "qualifiedtobuy",
+                  "fehlermeldung": "Error to load the Contact Data ("+contactId+")"
                 };
                 var SimplePublicObjectInput = { properties };
                 await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);   
@@ -962,7 +966,8 @@ app.post('/hubspotwebhook', async (req, res) => {
                       var properties = {
                         "invoiceagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
                         "invoicedisagree": "",
-                        "dealstage": "363483639"
+                        "dealstage": "363483639",
+                        "fehlermeldung": ""
                       };
             
                       var SimplePublicObjectInput = { properties };
@@ -970,15 +975,39 @@ app.post('/hubspotwebhook', async (req, res) => {
                     }
                   } else {
                     errorlogging.saveError("error", "lexoffice", "Error create invoice rom deal "+dealId, createdInvoiceResult);
+
+                    var properties = {
+                      "invoiceagree": dayjs().tz("Europe/Berlin").format('YYYY-MM-DD'),
+                      "invoicedisagree": "",
+                      "dealstage": "363483639",
+                      "fehlermeldung": ""
+                    };
+          
+                    var SimplePublicObjectInput = { properties };
+                    await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
                   }
 
                 }else{
                   errorlogging.saveError("error", "lexoffice", "Error search contact", "");
+
+                  var properties = {
+                    "fehlermeldung": "Error search contact"
+                  };
+        
+                  var SimplePublicObjectInput = { properties };
+                  await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
                 }
 
               } catch (err) {
                 errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
                 console.log(date+" - "+err);
+
+                var properties = {
+                  "fehlermeldung": "Error to load the Contact Data ("+contactId+")"
+                };
+      
+                var SimplePublicObjectInput = { properties };
+                await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
               }
             }
           } catch (err) {
@@ -1005,7 +1034,8 @@ app.post('/hubspotwebhook', async (req, res) => {
               
               if(dealData.properties.invoiceid == null){
                 var properties = {
-                  "dealstage": "363483639"
+                  "dealstage": "363483639",
+                  "fehlermeldung": ""
                 };
                 var SimplePublicObjectInput = { properties };
                 await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
@@ -1059,6 +1089,12 @@ app.post('/hubspotwebhook', async (req, res) => {
               } catch (err) {
                 errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
                 console.log(date+" - "+err);
+
+                var properties = {
+                  "fehlermeldung": "Error to load the Contact Data ("+contactId+")"
+                };
+                var SimplePublicObjectInput = { properties };
+                await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
               }
 
             } catch (err) {
@@ -1294,6 +1330,12 @@ app.post('/hubspotwebhook', async (req, res) => {
             }catch(err){
               errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
               console.log(date+" - "+err);
+
+              var properties = {
+                "fehlermeldung": "Error to load the Contact Data ("+contactId+")"
+              };
+              var SimplePublicObjectInput = { properties };
+              await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
             }
           }
 
@@ -1343,6 +1385,12 @@ app.post('/hubspotwebhook', async (req, res) => {
           }catch(err){
             errorlogging.saveError("error", "hubspot", "Error to load the Contact Data ("+contactId+")", "");
             console.log(date+" - "+err);
+
+            var properties = {
+              "fehlermeldung": "Error to load the Contact Data ("+contactId+")"
+            };
+            var SimplePublicObjectInput = { properties };
+            await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);  
           }
 
         }
