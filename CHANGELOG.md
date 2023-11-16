@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.7.1...v1.8.0) (2023-11-16)
+
+
+### Features
+
+* :sparkles: Deal Owner name in email ([2e602e4](https://github.com/Spottel/Automatenhandel24-Connector/commit/2e602e4d744e511f54be8d79c9dadc5ec47c64ee))
+
 ## [1.7.1](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.7.0...v1.7.1) (2023-11-16)
 
 
