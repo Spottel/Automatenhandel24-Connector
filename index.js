@@ -2081,28 +2081,30 @@ cron.schedule('*/30 * * * *', async function() {
       price = price.replace(",", ".");
       price = parseFloat(price);
 
-      var properties = {
-        "name": await page.locator('input[name="title"]').inputValue(),
-        "description": await page.locator('textarea[name="description"]').inputValue(),
-        "hs_price_eur": price,
-        "hs_product_type": "inventory",
-        "steuer_satz": currentTax,
-        "lexoffice_product_id": foundProductId
-      };
+      if(price >= 0){
+        var properties = {
+          "name": await page.locator('input[name="title"]').inputValue(),
+          "description": await page.locator('textarea[name="description"]').inputValue(),
+          "hs_price_eur": price,
+          "hs_product_type": "inventory",
+          "steuer_satz": currentTax,
+          "lexoffice_product_id": foundProductId
+        };
 
-      
-      var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundProductId, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+        
+        var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundProductId, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
 
-      try {
-        var apiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest);  
+        try {
+          var apiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest);  
 
-        if(apiResponse.total == 0){
-          var SimplePublicObjectInput = { properties };
-          var apiResponse = await hubspotClient.crm.products.basicApi.create(SimplePublicObjectInput); 
+          if(apiResponse.total == 0){
+            var SimplePublicObjectInput = { properties };
+            var apiResponse = await hubspotClient.crm.products.basicApi.create(SimplePublicObjectInput); 
+          }
+        }catch (err){
+          errorlogging.saveError("error", "lexoffice", "Error import product ("+await page.locator('input[name="title"]').inputValue()+")", err);
+          console.log(date+" - "+err);
         }
-      }catch (err){
-        errorlogging.saveError("error", "lexoffice", "Error import product ("+await page.locator('input[name="title"]').inputValue()+")", err);
-        console.log(date+" - "+err);
       }
       
 
