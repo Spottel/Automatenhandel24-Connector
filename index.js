@@ -393,7 +393,7 @@ app.get('/registerHubSpotApp', async (req, res) => {
  */
 app.post('/hubspotwebhook', async (req, res) => {
   var body = req.body[0];
-
+  console.log("body", body);
   if(req.headers['x-hubspot-signature'] && body['attemptNumber'] == 0){
     var hash = crypto.createHash('sha256');
     source_string = await settings.getSettingData('hubspotclientsecret') + JSON.stringify(req.body);
@@ -406,9 +406,12 @@ app.post('/hubspotwebhook', async (req, res) => {
 
     // LexOffice Api Client
     const lexOfficeClient = new lexoffice.Client(await settings.getSettingData('lexofficeapikey'));
-
+console.log("level1");
     if(gen_hash == req.headers['x-hubspot-signature']){
-      if (body.subscriptionType) {      
+      console.log("level2");
+      if (body.subscriptionType) {     
+        console.log("level3");
+         
         // Send Offer
         if (body.subscriptionType == "deal.propertyChange" && body.propertyName == "dealstage" && body.propertyValue == "363483635") {  
           var dealId = body.objectId;
@@ -692,6 +695,7 @@ app.post('/hubspotwebhook', async (req, res) => {
 
         // Send Invoice
         if (body.subscriptionType == "deal.propertyChange" && body.propertyName == "dealstage" && body.propertyValue == "363483638") {
+          console.log("level4");
           var dealId = body.objectId;
 
           // Lead Deal Data
