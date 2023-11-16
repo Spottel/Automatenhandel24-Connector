@@ -415,7 +415,7 @@ app.post('/hubspotwebhook', async (req, res) => {
           var dealId = body.objectId;
 
           // Lead Deal Data
-          var properties = ["offerid"];
+          var properties = ["offerid", "hubspot_owner_id"];
           var associations = ["contact", "product", "line_items"];
 
           try {
@@ -434,7 +434,17 @@ app.post('/hubspotwebhook', async (req, res) => {
               
               try {
                 var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
-        
+
+                if(dealData.properties.hubspot_owner_id && dealData.properties.hubspot_owner_id != null){
+                  var ownerData = await hubspotClient.crm.owners.ownersApi.getById(dealData.properties.hubspot_owner_id);
+                  contactData.properties.ownerFirstname = ownerData.firstName;
+                  contactData.properties.ownerLastname =  ownerData.lastName;
+                }else{
+                  contactData.properties.ownerFirstname = "Julian";
+                  contactData.properties.ownerLastname =  "Rosit";
+                }
+       
+       
                 // Check Contact LexOffice
                 const contactResult = await lexOfficeClient.filterContact({"email": contactData.properties.email});
 
@@ -696,7 +706,7 @@ app.post('/hubspotwebhook', async (req, res) => {
           var dealId = body.objectId;
 
           // Lead Deal Data
-          var properties = ["zahlungs_art", "invoiceid"];
+          var properties = ["zahlungs_art", "invoiceid", "hubspot_owner_id"];
           var associations = ["contact", "product", "line_items"];
 
           try {
@@ -715,6 +725,15 @@ app.post('/hubspotwebhook', async (req, res) => {
               
               try {
                 var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
+
+                if(dealData.properties.hubspot_owner_id && dealData.properties.hubspot_owner_id != null){
+                  var ownerData = await hubspotClient.crm.owners.ownersApi.getById(dealData.properties.hubspot_owner_id);
+                  contactData.properties.ownerFirstname = ownerData.firstName;
+                  contactData.properties.ownerLastname =  ownerData.lastName;
+                }else{
+                  contactData.properties.ownerFirstname = "Julian";
+                  contactData.properties.ownerLastname =  "Rosit";
+                }
 
                 // Check Contact LexOffice
                 const contactResult = await lexOfficeClient.filterContact({"email": contactData.properties.email});
@@ -1005,7 +1024,7 @@ app.post('/hubspotwebhook', async (req, res) => {
 
           if(body.propertyValue != ""){
             // Lead Deal Data
-            var properties = ["invoiceid", "planneddeliverydate"];
+            var properties = ["invoiceid", "planneddeliverydate", "hubspot_owner_id"];
             var associations = ["contact", "product", "line_items"];
 
             try {
@@ -1019,6 +1038,16 @@ app.post('/hubspotwebhook', async (req, res) => {
               
               try {
                 var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
+
+                if(dealData.properties.hubspot_owner_id && dealData.properties.hubspot_owner_id != null){
+                  var ownerData = await hubspotClient.crm.owners.ownersApi.getById(dealData.properties.hubspot_owner_id);
+                  contactData.properties.ownerFirstname = ownerData.firstName;
+                  contactData.properties.ownerLastname =  ownerData.lastName;
+                }else{
+                  contactData.properties.ownerFirstname = "Julian";
+                  contactData.properties.ownerLastname =  "Rosit";
+                }
+                
 
                 contactData.properties.plannedDeliveryDate = dayjs(dealData.properties.planneddeliverydate).format('DD.MM.YYYY');
                 var mailSubject = replacePlaceholder(await settings.getSettingData('planneddeliverydatemailsubject'), contactData.properties);
@@ -1146,7 +1175,7 @@ app.post('/hubspotwebhook', async (req, res) => {
           const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
 
           // Lead Deal Data
-          var properties = ["auftragsbestatigungs_id", "offerid", "offerid", "orderdelivered"];
+          var properties = ["auftragsbestatigungs_id", "offerid", "offerid", "orderdelivered", "hubspot_owner_id "];
           var associations = ["contact", "product", "line_items"];
 
           
@@ -1164,6 +1193,17 @@ app.post('/hubspotwebhook', async (req, res) => {
               
             try {
               var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
+
+              if(dealData.properties.hubspot_owner_id && dealData.properties.hubspot_owner_id != null){
+                var ownerData = await hubspotClient.crm.owners.ownersApi.getById(dealData.properties.hubspot_owner_id);
+                contactData.properties.ownerFirstname = ownerData.firstName;
+                contactData.properties.ownerLastname =  ownerData.lastName;
+              }else{
+                contactData.properties.ownerFirstname = "Julian";
+                contactData.properties.ownerLastname =  "Rosit";
+              }
+
+
 
               if(dealData.properties.auftragsbestatigungs_id == "" || dealData.properties.auftragsbestatigungs_id == null){
                 if(dealData.properties.offerid != "" && dealData.properties.offerid != null){
@@ -1276,6 +1316,8 @@ app.post('/hubspotwebhook', async (req, res) => {
               
           try {
             var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
+            contactData.properties.ownerFirstname = "Julian";
+            contactData.properties.ownerLastname =  "Rosit";
 
             if(contactData.properties.email != "" && contactData.properties.email != null){
               if(contactData.properties.welcome_message != "" || contactData.properties.welcome_message != null){
@@ -1388,7 +1430,9 @@ app.post('/lexofficewebhook', async (req, res) => {
                       const downloadFile = await lexOfficeClient.downloadFile(createdOfferResultFile.val.documentFileId);
 
                       var mailData = {
-                        "offerNumber":offerResult.val.voucherNumber
+                        "offerNumber":offerResult.val.voucherNumber,
+                        "ownerFirstname": "Julian",
+                        "ownerLastname":  "Rosit"
                       }
   
                       var mailSubject = replacePlaceholder(await settings.getSettingData('offerccmailsubject'), mailData);
@@ -1551,7 +1595,9 @@ app.post('/lexofficewebhook', async (req, res) => {
                           var properties = ["email", "firstname", "lastname", "company", "address", "zip", "city", "salutation"];
                           var contactData = await hubspotClient.crm.contacts.basicApi.getById(apiResponse.results[0].id, properties, undefined, undefined, false);
 
-
+                          contactData.properties.ownerFirstname = "Julian";
+                          contactData.properties.ownerLastname =  "Rosit";
+                         
                           const createdOfferResultFile = await lexOfficeClient.renderQuotationDocumentFileId(offerResult.val.id);
 
                           if (createdOfferResultFile.ok) {
@@ -1700,7 +1746,7 @@ app.post('/lexofficewebhook', async (req, res) => {
                           }
 
                           if(foundOffer){
-                            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundOfferId, "propertyName":"offerid","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+                            var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundOfferId, "propertyName":"offerid","operator":"EQ"}]}], properties:['hubspot_owner_id'], limit: 100, after: 0 };
                             var apiResponse = await hubspotClient.crm.deals.searchApi.doSearch(PublicObjectSearchRequest);
                             
                             if(apiResponse.total != 0){
@@ -1721,6 +1767,15 @@ app.post('/lexofficewebhook', async (req, res) => {
                               // Send Invoice Mail
                               var properties = ["email", "firstname", "lastname", "company", "address", "zip", "city", "salutation"];
                               var contactData = await hubspotClient.crm.contacts.basicApi.getById(contactId, properties, undefined, undefined, false);
+
+                              if(apiResponse.results[0].properties.hubspot_owner_id && apiResponse.results[0].properties.hubspot_owner_id != null){
+                                var ownerData = await hubspotClient.crm.owners.ownersApi.getById(apiResponse.results[0].properties.hubspot_owner_id);
+                                contactData.properties.ownerFirstname = ownerData.firstName;
+                                contactData.properties.ownerLastname =  ownerData.lastName;
+                              }else{
+                                contactData.properties.ownerFirstname = "Julian";
+                                contactData.properties.ownerLastname =  "Rosit";
+                              }
 
                               const createdInvoiceResultFile = await lexOfficeClient.renderInvoiceDocumentFileId(invoiceResult.val.id);
                               if (createdInvoiceResultFile.ok) {
