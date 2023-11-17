@@ -396,7 +396,8 @@ app.post('/hubspotwebhook', async (req, res) => {
 
   if(req.headers['x-hubspot-signature'] && body['attemptNumber'] == 0){
     var hash = crypto.createHash('sha256');
-    source_string = await settings.getSettingData('hubspotclientsecret') + JSON.stringify(req.body);
+    source_string =  await settings.getSettingData('hubspotclientsecret') + JSON.stringify(req.body);
+    source_string = "c0b993ec-8043-4a00-9636-56a1e2555ac0" + JSON.stringify(req.body);
     data = hash.update(source_string);
     gen_hash= data.digest('hex');
 
@@ -412,13 +413,24 @@ app.post('/hubspotwebhook', async (req, res) => {
         // Standard Deal Value
         if (body.subscriptionType == "deal.creation"){
           var dealId = body.objectId;
+          
+          try{
+            const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
 
-          var properties = {
-            "beleg_zusatz_information": "Wir freuen uns auf eine Zusammenarbeit"
-          };
+            var properties = ["beleg_zusatz_information"];
+            var dealData = await hubspotClient.crm.deals.basicApi.getById(dealId, properties, undefined, undefined, false, undefined);
 
-          var SimplePublicObjectInput = { properties };
-          await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);
+            if(dealData.properties.beleg_zusatz_information == null){
+              var properties = {
+                "beleg_zusatz_information": "Wir freuen uns auf eine Zusammenarbeit"
+              };
+
+              var SimplePublicObjectInput = { properties };
+              await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);
+            }
+          } catch (err) {
+            console.log(date+" - "+err);
+          }
         }
 
          
@@ -1592,7 +1604,7 @@ app.post('/lexofficewebhook', async (req, res) => {
                             "closedate": dayjs(offerResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
                             "amount": "0",
                             "dealname": "Angebot "+offerResult.val.voucherNumber,
-                            "beleg_zusatz_information": ""
+                            "beleg_zusatz_information": offerResult.val.remark ? offerResult.val.remark : ""
                           };
 
                           var amount = 0;
@@ -1831,7 +1843,8 @@ app.post('/lexofficewebhook', async (req, res) => {
                                 "invoiceid": invoiceResult.val.id,
                                 "invoicecreateat": dayjs(invoiceResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
                                 "rechnungs_url": documentUrl,
-                                "dealstage": "363483638"
+                                "dealstage": "363483638",
+                                "beleg_zusatz_information": invoiceResult.val.remark ? invoiceResult.val.remark : ""
                               };
 
                               var SimplePublicObjectInput = { properties };
