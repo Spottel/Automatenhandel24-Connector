@@ -408,14 +408,26 @@ app.post('/hubspotwebhook', async (req, res) => {
     const lexOfficeClient = new lexoffice.Client(await settings.getSettingData('lexofficeapikey'));
 
     if(gen_hash == req.headers['x-hubspot-signature']){
-      if (body.subscriptionType) {     
+      if (body.subscriptionType) { 
+        // Standard Deal Value
+        if (body.subscriptionType == "deal.creation"){
+          var dealId = body.objectId;
+
+          var properties = {
+            "beleg_zusatz_information": "Wir freuen uns auf eine Zusammenarbeit"
+          };
+
+          var SimplePublicObjectInput = { properties };
+          await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);
+        }
+
          
         // Send Offer
         if (body.subscriptionType == "deal.propertyChange" && body.propertyName == "dealstage" && body.propertyValue == "363483635") {  
           var dealId = body.objectId;
 
           // Lead Deal Data
-          var properties = ["offerid", "hubspot_owner_id"];
+          var properties = ["offerid", "hubspot_owner_id", "beleg_zusatz_information"];
           var associations = ["contact", "product", "line_items"];
 
           try {
@@ -606,6 +618,12 @@ app.post('/hubspotwebhook', async (req, res) => {
                     "title": "Angebot"
                   }
 
+                  if(dealData.properties.beleg_zusatz_information && dealData.properties.beleg_zusatz_information != null){
+                    if(dealData.properties.beleg_zusatz_information != ""){
+                      offerData.remark = dealData.properties.beleg_zusatz_information;
+                    }
+                  }
+
                   const createdOfferResult = await lexOfficeClient.createQuotation(offerData, { finalize: true });
                   
                   if (createdOfferResult.ok) {
@@ -710,7 +728,7 @@ app.post('/hubspotwebhook', async (req, res) => {
           var dealId = body.objectId;
 
           // Lead Deal Data
-          var properties = ["zahlungs_art", "invoiceid", "hubspot_owner_id"];
+          var properties = ["zahlungs_art", "invoiceid", "hubspot_owner_id", "beleg_zusatz_information"];
           var associations = ["contact", "product", "line_items"];
 
           try {
@@ -895,12 +913,17 @@ app.post('/hubspotwebhook', async (req, res) => {
                       "shippingType": "none"
                     },
                     title: 'Rechnung',
-                    introduction: 'Unsere Lieferungen/Leistungen stellen wir Ihnen wie folgt in Rechnung',
-                    remark: 'Wir freuen uns auf eine Zusammenarbeit',
+                    introduction: 'Unsere Lieferungen/Leistungen stellen wir Ihnen wie folgt in Rechnung'
                   }
 
                   if(dealData.properties.zahlungs_art == "Finanzierung"){
                     invoiceData.paymentConditions.paymentTermLabel = "Finanzierung";
+                  }
+
+                  if(dealData.properties.beleg_zusatz_information && dealData.properties.beleg_zusatz_information != null){
+                    if(dealData.properties.beleg_zusatz_information != ""){
+                      invoiceData.remark = dealData.properties.beleg_zusatz_information;
+                    }
                   }
 
                   const createdInvoiceResult = await lexOfficeClient.createInvoice(invoiceData, { finalize: true});
@@ -1138,7 +1161,7 @@ app.post('/hubspotwebhook', async (req, res) => {
 
           if(body.propertyValue != ""){
             // Lead Deal Data
-            var properties = ["offerId"];
+            var properties = ["offerId", "beleg_zusatz_information"];
             var associations = ["contact", "product", "line_items"];
 
             try {
@@ -1264,9 +1287,14 @@ app.post('/hubspotwebhook', async (req, res) => {
                       "paymentConditions": offerData.val.paymentConditions,
                       "title": "Auftragsbestätigung",
                       "introduction": "Gerne bestätigen wir Ihren Auftrag.",
-                      "remark": "Wir freuen uns auf eine gute Zusammenarbeit.",
                       "deliveryTerms": "Lieferung an die angegebene Lieferadresse."
                     };
+
+                    if(dealData.properties.beleg_zusatz_information && dealData.properties.beleg_zusatz_information != null){
+                      if(dealData.properties.beleg_zusatz_information != ""){
+                        orderConfirmationData.remark = dealData.properties.beleg_zusatz_information;
+                      }
+                    }
 
                     const createdOrderConfirmationResult = await lexOfficeClient.createOrderConfirmation(orderConfirmationData);
 
@@ -1563,7 +1591,8 @@ app.post('/lexofficewebhook', async (req, res) => {
                             "dealstage": "363483635",
                             "closedate": dayjs(offerResult.val.createdDate).tz("Europe/Berlin").format('YYYY-MM-DD'),
                             "amount": "0",
-                            "dealname": "Angebot "+offerResult.val.voucherNumber
+                            "dealname": "Angebot "+offerResult.val.voucherNumber,
+                            "beleg_zusatz_information": ""
                           };
 
                           var amount = 0;
