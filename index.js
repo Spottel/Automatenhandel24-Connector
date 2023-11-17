@@ -2172,7 +2172,7 @@ cron.schedule('0 0 * * *', async function() {
  * Import Products
  * 
  */
-cron.schedule('*/60 * * * *', async function() {
+cron.schedule('*/30 * * * *', async function() {
   const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
 
   dayjs.extend(utc)
@@ -2188,183 +2188,98 @@ cron.schedule('*/60 * * * *', async function() {
   await page.click("text=ANMELDEN");
   await page.waitForLoadState('networkidle');
 
-  // Import Products
-  await page.goto('https://app.lexoffice.de/mat/list?rowsPerPage=3&orderBy=title&order=asc&page=100&archived=false&query=&type=PRODUCT');
-  await page.waitForLoadState('networkidle');
-
-  var morePage = true;
-  var currentPage = 1;
-
-  while(morePage){
-    var arrayOfLocators = await page.getByTestId('material-item-title');
-    var elementsCount = await arrayOfLocators.count();
   
-    for (var index= 0; index < elementsCount ; index++) {
-      var element = await arrayOfLocators.nth(index);
-      await element.click();
-      await page.goto(await page.url());
-      await page.waitForLoadState('networkidle');
+  var call = false;
+  page.on('requestfinished', async request => {
+    if(request.url().includes("https://app.lexoffice.de/mat/material-rest/materials")){
+      if(!call){
+        call = true;
 
-      var foundProductId = await page.url();
-      foundProductId = foundProductId.split("/");
-      foundProductId = foundProductId[foundProductId.length-1];
+        var firstRow = 0;
+        var lastPage = false;
+        var numRows = 20;
+        var productList = [];
 
-      var foundTax = await page.locator('//label[contains(text(),"Steuer")]/parent::div/div/div').innerText();
-      var currentTax = "19 %";
+        while(!lastPage){
+          var productData = await axios({
+            method: 'get',
+            url: 'https://app.lexoffice.de/mat/material-rest/materials/v2?numRows='+numRows+'&orderBy=title&order=asc&firstRow='+firstRow +'&archived=false',
+            headers: await request.allHeaders(),
+          });
 
-      if(foundTax == "USt 19%"){
-        currentTax = "19 %";
-      }else if(foundTax == "USt 7%"){
-        currentTax = "7 %";
-      }else if(foundTax == "USt 0%"){
-        currentTax = "0 %";
-      }
-
-      var price = await page.getByLabel('Nettopreis').inputValue();
-      price = price.replace(".", "");
-      price = price.replace(",", ".");
-      price = parseFloat(price);
-
-      if(price >= 0){
-        var properties = {
-          "name": await page.locator('input[name="title"]').inputValue(),
-          "description": await page.locator('textarea[name="description"]').inputValue(),
-          "hs_price_eur": price,
-          "hs_product_type": "inventory",
-          "steuer_satz": currentTax,
-          "lexoffice_product_id": foundProductId
-        };
-
-        
-        var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundProductId, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
-
-        try {
-          var apiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest);  
-
-          if(apiResponse.total == 0){
-            var SimplePublicObjectInput = { properties };
-            var apiResponse = await hubspotClient.crm.products.basicApi.create(SimplePublicObjectInput); 
-          }
-        }catch (err){
-          errorlogging.saveError("error", "lexoffice", "Error import product ("+await page.locator('input[name="title"]').inputValue()+")", err);
-          console.log(date+" - "+err);
-        }
-      }
-      
-
-      await page.goBack();
-      await page.waitForLoadState('networkidle');
-            
-      if(currentPage > 1){
-        for(var a=1; a<currentPage; a++){
-          await page.getByTitle("Zur nächsten Seite").click();
-          await page.waitForLoadState('networkidle');
-        }
-      }
-      
-    }
-
-    if(await page.getByTitle("Zur nächsten Seite").isDisabled()){
-      morePage = false;
-    }else{
-      await page.getByTitle("Zur nächsten Seite").click();
-      await page.waitForLoadState('networkidle');
-      currentPage = new URL(await page.url()).searchParams.get("page");
-    }
-  }
-
-  // Import Services
-  await page.goto('https://app.lexoffice.de/mat/list?rowsPerPage=3&orderBy=title&order=asc&page=100&archived=false&query=&type=SERVICE');
-  await page.waitForLoadState('networkidle');
-
-  var morePage = true;
-  var currentPage = 1;
-
-  while(morePage){
-    var arrayOfLocators = await page.getByTestId('material-item-title');
-    var elementsCount = await arrayOfLocators.count();
-  
-    for (var index= 0; index < elementsCount ; index++) {
-      var element = await arrayOfLocators.nth(index);
-      await element.click();
-      await page.goto(await page.url());
-      await page.waitForLoadState('networkidle');
-
-      var foundProductId = await page.url();
-      foundProductId = foundProductId.split("/");
-      foundProductId = foundProductId[foundProductId.length-1];
-
-      var foundTax = await page.locator('//label[contains(text(),"Steuer")]/parent::div/div/div').innerText();
-      var currentTax = "19 %";
-
-      if(foundTax == "USt 19%"){
-        currentTax = "19 %";
-      }else if(foundTax == "USt 7%"){
-        currentTax = "7 %";
-      }else if(foundTax == "USt 0%"){
-        currentTax = "0 %";
-      }
-
-      var price = await page.getByLabel('Nettopreis').inputValue();
-      price = price.replace(".", "");
-      price = price.replace(",", ".");
-      price = parseFloat(price);
-
-      if(price >= 0){
-        var properties = {
-          "name": await page.locator('input[name="title"]').inputValue(),
-          "description": await page.locator('textarea[name="description"]').inputValue(),
-          "hs_price_eur": price,
-          "hs_product_type": "service",
-          "steuer_satz": currentTax,
-          "lexoffice_product_id": foundProductId
-        };
-
-        
-        var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": foundProductId, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
-
-        try {
-          var apiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest);  
-
-          if(apiResponse.total == 0){
-            var SimplePublicObjectInput = { properties };
-            var apiResponse = await hubspotClient.crm.products.basicApi.create(SimplePublicObjectInput); 
+          if(firstRow > productData.data.totalRows){
+            lastPage = true;
           }else{
-            var SimplePublicObjectInput = { properties };
-            var apiResponse = await hubspotClient.crm.products.basicApi.update(apiResponse.results[0].id, SimplePublicObjectInput); 
-          }
-        }catch (err){
-          errorlogging.saveError("error", "lexoffice", "Error import product ("+await page.locator('input[name="title"]').inputValue()+")", err);
-          console.log(date+" - "+err);
-        }
-      }
-      
+            for(var i=0; i<productData.data.materials.length; i++){
+              if(!productList.includes(productData.data.materials[i].id)){
+                var currentTax = "19 %";
 
-      await page.goBack();
-      await page.waitForLoadState('networkidle');
+                if(productData.data.materials[i].taxRate.percent == 19){
+                  currentTax = "19 %";
+                }else if(productData.data.materials[i].taxRate.percent == 7){
+                  currentTax = "7 %";
+                }else if(productData.data.materials[i].taxRate.percent == 0){
+                  currentTax = "0 %";
+                }
+
+                var price = productData.data.materials[i].netPrice;
+
+                if(price >= 0){
+                  var properties = {
+                    "name": productData.data.materials[i].title,
+                    "description": productData.data.materials[i].description != null ? productData.data.materials[i].description : "",
+                    "hs_price_eur": price,
+                    "hs_product_type": "inventory",
+                    "steuer_satz": currentTax,
+                    "lexoffice_product_id": productData.data.materials[i].id
+                  };
+
+                  if(productData.data.materials[i].type == "PRODUCT"){
+                    properties.hs_product_type = "inventory";
+                  }else if(productData.data.materials[i].type == "SERVICE"){
+                    properties.hs_product_type = "service";
+                  }
+                  
+                  var PublicObjectSearchRequest = { filterGroups: [{"filters":[{"value": productData.data.materials[i].id, "propertyName":"lexoffice_product_id","operator":"EQ"}]}], properties:[], limit: 100, after: 0 };
+
+                  try {
+                    var apiResponse = await hubspotClient.crm.products.searchApi.doSearch(PublicObjectSearchRequest); 
+                    
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+          
+                    if(apiResponse.total == 0){
+                      var SimplePublicObjectInput = { properties };
+                      var apiResponse = await hubspotClient.crm.products.basicApi.create(SimplePublicObjectInput); 
+                    }else{
+                      var SimplePublicObjectInput = { properties };
+                      var apiResponse = await hubspotClient.crm.products.basicApi.update(apiResponse.results[0].id, SimplePublicObjectInput); 
+                    }
+                  }catch (err){
+                    errorlogging.saveError("error", "lexoffice", "Error import product ("+productData.data.materials[i].title+")", err);
+                    console.log(date+" - "+err);
+                  }
+                  
+                }
+
+                productList.push(productData.data.materials[i].id);
+              }
+            }
             
-      if(currentPage > 1){
-        for(var a=1; a<currentPage; a++){
-          await page.getByTitle("Zur nächsten Seite").click();
-          await page.waitForLoadState('networkidle');
+            firstRow = firstRow+numRows-1;
+          }
         }
       }
-      
     }
+  });
 
-    if(await page.getByTitle("Zur nächsten Seite").isDisabled()){
-      morePage = false;
-    }else{
-      await page.getByTitle("Zur nächsten Seite").click();
-      await page.waitForLoadState('networkidle');
-      currentPage = new URL(await page.url()).searchParams.get("page");
-    }
-  }
+  await page.goto('https://app.lexoffice.de/mat/list?rowsPerPage=3&orderBy=title&order=asc&page=20&archived=false&query=&type=PRODUCT');
+  await page.waitForLoadState('networkidle');
 
   await browser.close();
-  console.log(date+" - Product Import Completed");
-});
 
+  console.log(date+" - Product Import Completed");
+
+});
 
 
 /** 
