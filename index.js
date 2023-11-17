@@ -2172,7 +2172,7 @@ cron.schedule('0 0 * * *', async function() {
  * Import Products
  * 
  */
-cron.schedule('*/30 * * * *', async function() {
+cron.schedule('*/60 * * * *', async function() {
   const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
 
   dayjs.extend(utc)
