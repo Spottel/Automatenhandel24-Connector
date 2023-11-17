@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.9.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.8.0...v1.9.0) (2023-11-17)
+
+
+### Features
+
+* :sparkles: Change remark from documents ([025f3cd](https://github.com/Spottel/Automatenhandel24-Connector/commit/025f3cd259f0db9d93ba356dec81e61455fe7a4a))
+
 ## [1.8.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.7.1...v1.8.0) (2023-11-16)
 
 
