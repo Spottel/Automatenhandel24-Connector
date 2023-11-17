@@ -397,7 +397,6 @@ app.post('/hubspotwebhook', async (req, res) => {
   if(req.headers['x-hubspot-signature'] && body['attemptNumber'] == 0){
     var hash = crypto.createHash('sha256');
     source_string =  await settings.getSettingData('hubspotclientsecret') + JSON.stringify(req.body);
-    source_string = "c0b993ec-8043-4a00-9636-56a1e2555ac0" + JSON.stringify(req.body);
     data = hash.update(source_string);
     gen_hash= data.digest('hex');
 
