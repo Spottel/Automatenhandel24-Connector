@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.9.1](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.9.0...v1.9.1) (2023-11-27)
+
+
+### Bug Fixes
+
+* :bug: Check if contact already exists (contact import) ([3110199](https://github.com/Spottel/Automatenhandel24-Connector/commit/31101998d08884d959c0992f167c55013032771a))
+* :zap: Improve import from products ([e5d3b5d](https://github.com/Spottel/Automatenhandel24-Connector/commit/e5d3b5d1cda6e2601eea34db9306d9d2ecbba585))
+
 ## [1.9.0](https://github.com/Spottel/Automatenhandel24-Connector/compare/v1.8.0...v1.9.0) (2023-11-17)
 
 
