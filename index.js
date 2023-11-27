@@ -2107,7 +2107,7 @@ cron.schedule('0 0 * * *', async function() {
               var apiResponse = await hubspotClient.crm.contacts.searchApi.doSearch(PublicObjectSearchRequest);  
               await new Promise(resolve => setTimeout(resolve, 1000)); 
 
-              if(!apiResponse.results[0]){
+              if(apiResponse.total == 0){
                 var properties = {
                   "email": contactsResultData[a].emailAddresses.business[0]
                 };
