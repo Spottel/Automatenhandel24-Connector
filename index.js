@@ -2081,6 +2081,7 @@ app.get('/showdocument', async (req, res) => {
  * Check LexOffice Contact
  * 
  */
+/*
 cron.schedule('0 0 * * *', async function() {
   const hubspotClient = new hubspot.Client({ "accessToken": await settings.getSettingData('hubspotaccesstoken') });
 
@@ -2167,6 +2168,7 @@ cron.schedule('0 0 * * *', async function() {
   }
   console.log("Contact Import completed");
 });
+*/
 
 /** 
  * Import Products
