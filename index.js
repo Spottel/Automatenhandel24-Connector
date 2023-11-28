@@ -400,6 +400,11 @@ app.post('/hubspotwebhook', async (req, res) => {
     data = hash.update(source_string);
     gen_hash= data.digest('hex');
 
+    var hash = crypto.createHash('sha256');
+    source_string =  "c0b993ec-8043-4a00-9636-56a1e2555ac0" + JSON.stringify(req.body);
+    data = hash.update(source_string);
+    gen_hash1= data.digest('hex');
+
     dayjs.extend(utc)
     dayjs.extend(timezone)
     var date = dayjs().tz("Europe/Berlin").format('YYYY-MM-DD HH:mm:ss');
@@ -407,7 +412,7 @@ app.post('/hubspotwebhook', async (req, res) => {
     // LexOffice Api Client
     const lexOfficeClient = new lexoffice.Client(await settings.getSettingData('lexofficeapikey'));
 
-    if(gen_hash == req.headers['x-hubspot-signature']){
+    if(gen_hash == req.headers['x-hubspot-signature'] || gen_hash1 == req.headers['x-hubspot-signature']){
       if (body.subscriptionType) { 
         // Standard Deal Value
         if (body.subscriptionType == "deal.creation"){
@@ -554,12 +559,14 @@ app.post('/hubspotwebhook', async (req, res) => {
 
                     netAmount = parseFloat(lineItemData.properties.price);
                     taxAmount = (netAmount/100*taxRate);
-                    grossAmount = taxAmount+netAmount;
+                    taxAmount = parseFloat(taxAmount.toFixed(2));
+                    grossAmount = parseFloat(taxAmount)+parseFloat(netAmount);  
 
-                    totalPrice.totalNetAmount = totalPrice.totalNetAmount+netAmount;
-                    totalPrice.totalGrossAmount = totalPrice.totalGrossAmount+grossAmount;
-                    totalPrice.totalTaxAmount = totalPrice.totalTaxAmount+taxAmount;
+                    totalPrice.totalNetAmount = parseFloat(totalPrice.totalNetAmount)+netAmount;
+                    totalPrice.totalGrossAmount = parseFloat(totalPrice.totalGrossAmount)+grossAmount;
 
+                    totalPrice.totalTaxAmount = parseFloat(totalPrice.totalTaxAmount)+taxAmount;
+                    totalPrice.totalTaxAmount = parseFloat(totalPrice.totalTaxAmount.toFixed(2));
 
                     if(lineItemData.properties.hs_total_discount != null && lineItemData.properties.hs_total_discount != 0){
                       if(!totalPrice.totalDiscountAbsolute){
@@ -579,7 +586,11 @@ app.post('/hubspotwebhook', async (req, res) => {
                     }
 
                     if(foundTaxes >= 0){
-                      taxAmounts[foundTaxes].taxAmount = parseFloat(taxAmounts[foundTaxes].taxAmount)+parseFloat(taxAmount);
+                      var calcTax = parseFloat(taxAmounts[foundTaxes].taxAmount)+parseFloat(taxAmount);
+                      calcTax = parseFloat(calcTax.toFixed(2));
+                      taxAmounts[foundTaxes].taxAmount = calcTax ;
+                      
+
                       taxAmounts[foundTaxes].netAmount = parseFloat(taxAmounts[foundTaxes].netAmount)+parseFloat(netAmount);
                     }else{
                       taxAmounts.push({
@@ -634,7 +645,8 @@ app.post('/hubspotwebhook', async (req, res) => {
                       offerData.remark = dealData.properties.beleg_zusatz_information;
                     }
                   }
-
+                  
+                  await new Promise(resolve => setTimeout(resolve, 1000)); 
                   const createdOfferResult = await lexOfficeClient.createQuotation(offerData, { finalize: true });
                   
                   if (createdOfferResult.ok) {
@@ -704,6 +716,7 @@ app.post('/hubspotwebhook', async (req, res) => {
                     var SimplePublicObjectInput = { properties };
                     await hubspotClient.crm.deals.basicApi.update(dealId, SimplePublicObjectInput, undefined);   
                   }
+                  
                 }else{
                   errorlogging.saveError("error", "lexoffice", "Error search contact", "");
 
@@ -852,14 +865,17 @@ app.post('/hubspotwebhook', async (req, res) => {
                     var taxRate = productData.properties.steuer_satz;
                     taxRate = parseFloat(taxRate.replace(" %", ""));
 
-
                     netAmount = parseFloat(lineItemData.properties.price);
                     taxAmount = (netAmount/100*taxRate);
-                    grossAmount = taxAmount+netAmount;
+                    taxAmount = parseFloat(taxAmount.toFixed(2));
+                    grossAmount = parseFloat(taxAmount)+parseFloat(netAmount);
 
                     totalPrice.totalNetAmount = totalPrice.totalNetAmount+netAmount;
                     totalPrice.totalGrossAmount = totalPrice.totalGrossAmount+grossAmount;
-                    totalPrice.totalTaxAmount = totalPrice.totalTaxAmount+taxAmount;
+
+                    totalPrice.totalTaxAmount = parseFloat(totalPrice.totalTaxAmount)+taxAmount;
+                    totalPrice.totalTaxAmount = parseFloat(totalPrice.totalTaxAmount.toFixed(2));
+      
 
                     if(lineItemData.properties.hs_total_discount != null && lineItemData.properties.hs_total_discount != 0){
                       if(!totalPrice.totalDiscountAbsolute){
@@ -877,7 +893,10 @@ app.post('/hubspotwebhook', async (req, res) => {
                     }
 
                     if(foundTaxes >= 0){
-                      taxAmounts[foundTaxes].taxAmount = parseFloat(taxAmounts[foundTaxes].taxAmount)+parseFloat(taxAmount);
+                      var calcTax = parseFloat(taxAmounts[foundTaxes].taxAmount)+parseFloat(taxAmount);
+                      calcTax = parseFloat(calcTax.toFixed(2));
+                      taxAmounts[foundTaxes].taxAmount = calcTax ;
+
                       taxAmounts[foundTaxes].netAmount = parseFloat(taxAmounts[foundTaxes].netAmount)+parseFloat(netAmount);
                     }else{
                       taxAmounts.push({
@@ -937,6 +956,7 @@ app.post('/hubspotwebhook', async (req, res) => {
                     }
                   }
 
+                  await new Promise(resolve => setTimeout(resolve, 1000)); 
                   const createdInvoiceResult = await lexOfficeClient.createInvoice(invoiceData, { finalize: true});
 
                   if (createdInvoiceResult.ok) {
@@ -1307,6 +1327,7 @@ app.post('/hubspotwebhook', async (req, res) => {
                       }
                     }
 
+                    await new Promise(resolve => setTimeout(resolve, 1000)); 
                     const createdOrderConfirmationResult = await lexOfficeClient.createOrderConfirmation(orderConfirmationData);
 
                     if(createdOrderConfirmationResult.ok){
